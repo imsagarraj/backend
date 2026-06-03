@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+supabase
+redis
+celery[redis]
+google-genai
+requests
+python-dotenv
+pydantic
+emoji
+python-multipart
+supervisor
+gunicorn
