@@ -90,7 +90,34 @@ def get_business_detail(business_id: int, admin=Depends(verify_admin)):
 
 @router.get("/admin/pipeline")
 def get_pipeline_status(business_id: int = None, admin=Depends(verify_admin)):
-    return get_status(business_id)
+    supabase = get_supabase()
+    status = get_status(business_id)
+
+    queue_query = supabase.table('message_queue').select(
+        'id, customer_id, business_id, message_type, stage, sequence_day, '
+        'ai_generated_text, error_log, retry_count, max_retries, scheduled_at, sent_at, created_at, updated_at'
+    ).order('created_at', desc=True).limit(100)
+
+    if business_id:
+        queue_query = queue_query.eq('business_id', business_id)
+
+    queue_items = queue_query.execute()
+
+    for item in queue_items.data:
+        if item.get('customer_id'):
+            cust = supabase.table('customers').select('name, phone').eq('id', item['customer_id']).execute()
+            item['customer_name'] = cust.data[0]['name'] if cust.data else 'Unknown'
+            item['customer_phone'] = cust.data[0]['phone'] if cust.data else ''
+        else:
+            item['customer_name'] = 'Unknown'
+            item['customer_phone'] = ''
+        if item.get('business_id'):
+            biz = supabase.table('business_profiles').select('business_name').eq('id', item['business_id']).execute()
+            item['business_name'] = biz.data[0]['business_name'] if biz.data else 'Unknown'
+        else:
+            item['business_name'] = ''
+
+    return {**status, 'items': queue_items.data}
 
 
 @router.post("/admin/pipeline/{item_id}/retry")
