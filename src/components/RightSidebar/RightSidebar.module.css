@@ -1,0 +1,282 @@
+.sidebar {
+  width: var(--rightbar-width);
+  background: #fff;
+  border-left: 1px solid var(--color-border);
+  flex-shrink: 0;
+  height: 100vh;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.scrollArea {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sectionTitle {
+  font-size: 0.5625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-secondary);
+  margin-bottom: 6px;
+}
+
+/* AI Agent Card */
+.agentCard {
+  padding: 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-alt);
+}
+
+.agentRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.agentAvatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.statusDot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+}
+
+.dotActive {
+  background: var(--color-success);
+  animation: pulse 2s infinite;
+}
+
+.dotPaused {
+  background: var(--color-warning);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.2); }
+}
+
+.agentInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.agentName {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.agentStatus {
+  font-size: 0.625rem;
+  color: var(--color-text-secondary);
+}
+
+.agentMiniStats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.miniStat {
+  text-align: center;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+}
+
+.miniStatNumber {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.miniStatLabel {
+  font-size: 0.5625rem;
+  color: var(--color-text-secondary);
+}
+
+.pauseBtn {
+  width: 100%;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-warning);
+  background: transparent;
+  color: var(--color-warning);
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+
+.pauseBtn:hover {
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.resumeBtn {
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
+.resumeBtn:hover {
+  background: var(--color-success-dim);
+}
+
+/* Schedule */
+.scheduleList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.scheduleItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.scheduleTime {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-text);
+  width: 44px;
+  flex-shrink: 0;
+}
+
+.scheduleInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.scheduleCustomer {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scheduleType {
+  display: inline-block;
+  font-size: 0.5625rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 99px;
+  margin-top: 1px;
+}
+
+.typeDay1 { background: var(--color-blue-dim); color: var(--color-blue); }
+.typeDay3 { background: var(--color-accent-dim); color: var(--color-accent); }
+.typeDay15 { background: rgba(139, 92, 246, 0.1); color: #8b5cf6; }
+.typeDay30 { background: var(--color-success-dim); color: var(--color-success); }
+.typeCustom { background: rgba(107, 114, 128, 0.1); color: var(--color-text-secondary); }
+
+.statusScheduled {
+  font-size: 0.625rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.statusSent {
+  font-size: 0.625rem;
+  font-weight: 500;
+  color: var(--color-success);
+  flex-shrink: 0;
+}
+
+.emptyState {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+  padding: 8px 0;
+}
+
+/* This Week Stats */
+.weekStats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.weekStat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.weekStatInfo {
+  flex: 1;
+}
+
+.weekStatHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.weekStatLabel {
+  font-size: 0.6875rem;
+  color: var(--color-text-secondary);
+}
+
+.weekStatValue {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.weekStatTrend {
+  font-size: 0.625rem;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.trendUp { color: var(--color-success); }
+
+.progressBar {
+  height: 4px;
+  background: var(--color-border);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-bottom: 2px;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--color-accent);
+  border-radius: 99px;
+}
