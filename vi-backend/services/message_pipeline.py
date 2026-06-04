@@ -24,6 +24,7 @@ STAGES = [
     'sent',
     'failed',
     'dead',
+    'cancelled',
 ]
 
 

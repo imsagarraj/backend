@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getPipelineStatus, retryPipelineItem, retryAllFailed } from '../../lib/admin'
+import { getPipelineStatus, retryPipelineItem, retryAllFailed, cancelPipelineItem, deletePipelineItem } from '../../lib/admin'
 import styles from '../../components/AdminLayout/AdminLayout.module.css'
 
 const STAGE_COLORS = {
@@ -11,7 +11,10 @@ const STAGE_COLORS = {
   sent: '#10b981',
   failed: '#ef4444',
   dead: 'var(--color-text-muted)',
+  cancelled: '#6b7280',
 }
+
+const CANCELLABLE_STAGES = ['pending_schedule', 'pending_ai_gen', 'ready_to_send', 'sending']
 
 export default function AdminPipeline() {
   const navigate = useNavigate()
@@ -20,6 +23,7 @@ export default function AdminPipeline() {
   const [retrying, setRetrying] = useState(null)
   const [retryingAll, setRetryingAll] = useState(false)
   const [filterStage, setFilterStage] = useState('all')
+  const [actionLoading, setActionLoading] = useState(null)
 
   useEffect(() => { loadData() }, [])
 
@@ -58,6 +62,32 @@ export default function AdminPipeline() {
     }
   }
 
+  async function handleCancel(itemId) {
+    if (!confirm('Cancel this message? It will be marked as cancelled and won\'t be sent.')) return
+    setActionLoading(`cancel-${itemId}`)
+    try {
+      await cancelPipelineItem(itemId)
+      await loadData()
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  async function handleDelete(itemId) {
+    if (!confirm('Delete this message permanently?')) return
+    setActionLoading(`delete-${itemId}`)
+    try {
+      await deletePipelineItem(itemId)
+      await loadData()
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   const counts = pipeline?.counts || {}
   const allItems = pipeline?.items || []
   const filteredItems = filterStage === 'all'
@@ -66,7 +96,7 @@ export default function AdminPipeline() {
 
   const stages = [
     'pending_schedule', 'pending_ai_gen', 'ready_to_send',
-    'sending', 'sent', 'failed', 'dead',
+    'sending', 'sent', 'failed', 'dead', 'cancelled',
   ]
 
   return (
@@ -166,16 +196,36 @@ export default function AdminPipeline() {
                           {item.scheduled_at ? new Date(item.scheduled_at).toLocaleString() : '—'}
                         </td>
                         <td>
-                          {item.stage === 'failed' && (
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                            {item.stage === 'failed' && (
+                              <button
+                                className={`${styles.btn} ${styles.btnWarning}`}
+                                onClick={() => handleRetry(item.id)}
+                                disabled={retrying === item.id}
+                                style={{ padding: '4px 10px', fontSize: '0.7rem' }}
+                              >
+                                {retrying === item.id ? '...' : 'Retry'}
+                              </button>
+                            )}
+                            {CANCELLABLE_STAGES.includes(item.stage) && (
+                              <button
+                                className={`${styles.btn} ${styles.btnGhost}`}
+                                onClick={() => handleCancel(item.id)}
+                                disabled={actionLoading === `cancel-${item.id}`}
+                                style={{ padding: '4px 10px', fontSize: '0.7rem', color: '#f59e0b' }}
+                              >
+                                {actionLoading === `cancel-${item.id}` ? '...' : 'Cancel'}
+                              </button>
+                            )}
                             <button
-                              className={`${styles.btn} ${styles.btnWarning}`}
-                              onClick={() => handleRetry(item.id)}
-                              disabled={retrying === item.id}
-                              style={{ padding: '4px 10px', fontSize: '0.7rem' }}
+                              className={`${styles.btn} ${styles.btnGhost}`}
+                              onClick={() => handleDelete(item.id)}
+                              disabled={actionLoading === `delete-${item.id}`}
+                              style={{ padding: '4px 10px', fontSize: '0.7rem', color: '#ef4444' }}
                             >
-                              {retrying === item.id ? '...' : 'Retry'}
+                              {actionLoading === `delete-${item.id}` ? '...' : 'Delete'}
                             </button>
-                          )}
+                          </div>
                           {item.error_log && (
                             <div style={{ fontSize: '0.65rem', color: 'var(--color-error)', marginTop: 4, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {item.error_log}

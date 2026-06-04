@@ -142,6 +142,35 @@ def retry_all_failed(admin=Depends(verify_admin)):
     return retry_failed()
 
 
+@router.post("/admin/pipeline/{item_id}/cancel")
+def cancel_pipeline_item(item_id: int, admin=Depends(verify_admin)):
+    supabase = get_supabase()
+    item = supabase.table('message_queue').select('*').eq('id', item_id).execute()
+    if not item.data:
+        raise HTTPException(status_code=404, detail="Queue item not found")
+    if item.data[0]['stage'] in ('sent', 'failed', 'dead', 'cancelled'):
+        raise HTTPException(status_code=400, detail=f"Cannot cancel item in stage '{item.data[0]['stage']}'")
+
+    supabase.table('message_queue').update({
+        'stage': 'cancelled',
+        'error_log': 'Cancelled by admin',
+        'updated_at': datetime.now(timezone.utc).isoformat(),
+    }).eq('id', item_id).execute()
+
+    return {'status': 'cancelled', 'item_id': item_id}
+
+
+@router.delete("/admin/pipeline/{item_id}")
+def delete_pipeline_item(item_id: int, admin=Depends(verify_admin)):
+    supabase = get_supabase()
+    item = supabase.table('message_queue').select('id').eq('id', item_id).execute()
+    if not item.data:
+        raise HTTPException(status_code=404, detail="Queue item not found")
+
+    supabase.table('message_queue').delete().eq('id', item_id).execute()
+    return {'status': 'deleted', 'item_id': item_id}
+
+
 @router.get("/admin/agents")
 def list_agents(admin=Depends(verify_admin)):
     supabase = get_supabase()
