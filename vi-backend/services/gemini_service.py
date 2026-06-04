@@ -14,10 +14,10 @@ client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
 GEMINI_MODEL = 'gemini-2.5-flash'
 
 SEQUENCE_INSTRUCTIONS = {
-    0: "Day 1 - Purchase welcome. Celebrate their purchase, ask how they're feeling, invite them to reach out with any questions about the product/service.",
-    1: "Day 3 - Health/service check-in. Ask how they're doing since the purchase. Inquire about their experience, any concerns, or how the product/service is working for them.",
-    3: "Day 15 - Genuine care follow-up. Ask about their overall satisfaction. Check if they need any support, tips, or a follow-up visit. Make it conversational — ask questions that invite a reply.",
-    15: "Day 30 - Value-added check. Ask about their experience so far. Offer help, tips, or a complimentary check-up if relevant. Focus on their well-being, not sales."
+    0: "Day 1 - Welcome & thank you. Celebrate their purchase, ask how they're finding it, invite them to share feedback anytime.",
+    1: "Day 3 - Experience check-in. Ask about their experience with the product/service. Was it up to expectations? Any feedback or suggestions?",
+    3: "Day 15 - Review & feedback. Ask for their honest review. What did they like? What could be improved? This helps the business serve better.",
+    15: "Day 30 - Value & loyalty. Thank them for being a customer. Ask if they need anything else. Request a testimonial or referral if appropriate."
 }
 
 BOOK_APPOINTMENT_FUNC = types.FunctionDeclaration(
@@ -60,12 +60,14 @@ def build_system_prompt(agent, business, customer):
 - Previous responses: {(customer.get('response_count') or 0)}
 - Has appointment: {'Yes' if customer.get('next_booking') else 'No'}
 
-CONVERSATION INSTRUCTIONS:
+    CONVERSATION INSTRUCTIONS:
 - Match their communication style exactly
 - Be conversational: ask questions that invite replies
-- Show genuine interest in their well-being and experience
+- Show genuine interest in their experience with the business
+- Ask about what they liked and what could be improved (collect feedback naturally)
 - If they mention any problem or concern, address it with care
 - Build rapport naturally over multiple interactions
+- Collect reviews and feedback gently — make the customer feel heard
 """
 
     if 'dental' in biz_type or 'clinic' in biz_type or 'health' in biz_type:
@@ -106,7 +108,7 @@ def generate_followup_message(customer, business, agent, sequence_day):
 
     prompt = f"""
     Customer Name: {customer.get('name', 'Customer')}
-    Product Purchased: {customer.get('product_purchased') or customer.get('product', '')}
+    Product/Service Purchased: {customer.get('product_purchased') or customer.get('product', '')}
     Purchase Date: {customer.get('purchase_date', '')}
     Business Name: {business.get('business_name', '')}
     Business Type: {business.get('business_type', '')}
@@ -116,11 +118,17 @@ def generate_followup_message(customer, business, agent, sequence_day):
     Sequence: {SEQUENCE_INSTRUCTIONS.get(sequence_day, '')}
 
     CRITICAL INSTRUCTIONS:
-    - Write a natural WhatsApp message that sounds like a real person texting a customer
-    - Ask open-ended questions about their health, experience, or how the product is working
-    - Show genuine interest in their well-being
-    - If this is a health/care business, ask how they're feeling since the treatment
-    - The goal is to start a conversation, not deliver a monologue
+    - Write a natural WhatsApp message like a real person texting a customer
+    - Ask questions about their experience with the specific product/service they purchased
+    - Adapt your questions to the business type naturally:
+      * Cafe/restaurant: ask about food quality, service, ambiance, would they recommend
+      * Salon/spa: ask about their look/feel after the service, satisfaction
+      * Clinic/dental: ask how they're feeling, recovery, any concerns
+      * Retail/store: ask how the product is working, do they like it
+      * Gym/fitness: ask about their progress, how they're finding the routine
+      * Any other type: ask relevant experience questions naturally
+    - Collect feedback: ask what they liked and what could be improved
+    - The goal is genuine conversation and useful feedback for the business
     - End with a question that invites them to reply
     - Keep it under 80 words
     - Match your agent personality perfectly
