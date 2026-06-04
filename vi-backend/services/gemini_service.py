@@ -14,10 +14,10 @@ client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
 GEMINI_MODEL = 'gemini-2.5-flash'
 
 SEQUENCE_INSTRUCTIONS = {
-    0: "Day 1 - Purchase welcome. Warm, celebratory, genuine.",
-    1: "Day 3 - Check-in. Caring, curious, zero pressure.",
-    3: "Day 15 - Warm follow-up. Genuine care, no sales.",
-    15: "Day 30 - Soft upsell. Natural, friendly, no pressure."
+    0: "Day 1 - Purchase welcome. Celebrate their purchase, ask how they're feeling, invite them to reach out with any questions about the product/service.",
+    1: "Day 3 - Health/service check-in. Ask how they're doing since the purchase. Inquire about their experience, any concerns, or how the product/service is working for them.",
+    3: "Day 15 - Genuine care follow-up. Ask about their overall satisfaction. Check if they need any support, tips, or a follow-up visit. Make it conversational — ask questions that invite a reply.",
+    15: "Day 30 - Value-added check. Ask about their experience so far. Offer help, tips, or a complimentary check-up if relevant. Focus on their well-being, not sales."
 }
 
 BOOK_APPOINTMENT_FUNC = types.FunctionDeclaration(
@@ -52,10 +52,20 @@ def build_system_prompt(agent, business, customer):
     biz_type = (business.get('business_type') or '').lower()
 
     system_prompt += f"""
-\nCustomer personality detected: {customer.get('personality_profile', 'unknown')}
-Match their communication style exactly.
-Customer name: {customer.get('name', 'Customer')}
-Product they purchased: {customer.get('product_purchased') or customer.get('product', '')}
+\nCUSTOMER CONTEXT:
+- Name: {customer.get('name', 'Customer')}
+- Product/Service: {customer.get('product_purchased') or customer.get('product', '')}
+- Purchase Date: {customer.get('purchase_date', '')}
+- Personality: {customer.get('personality_profile', 'unknown')}
+- Previous responses: {(customer.get('response_count') or 0)}
+- Has appointment: {'Yes' if customer.get('next_booking') else 'No'}
+
+CONVERSATION INSTRUCTIONS:
+- Match their communication style exactly
+- Be conversational: ask questions that invite replies
+- Show genuine interest in their well-being and experience
+- If they mention any problem or concern, address it with care
+- Build rapport naturally over multiple interactions
 """
 
     if 'dental' in biz_type or 'clinic' in biz_type or 'health' in biz_type:
@@ -99,11 +109,22 @@ def generate_followup_message(customer, business, agent, sequence_day):
     Product Purchased: {customer.get('product_purchased') or customer.get('product', '')}
     Purchase Date: {customer.get('purchase_date', '')}
     Business Name: {business.get('business_name', '')}
+    Business Type: {business.get('business_type', '')}
     Customer Personality: {customer.get('personality_profile', 'unknown')}
+    Customer has replied before: {'Yes' if (customer.get('response_count') or 0) > 0 else 'No'}
+    Last contact: {customer.get('last_contact', 'None yet')}
     Sequence: {SEQUENCE_INSTRUCTIONS.get(sequence_day, '')}
 
-    Generate the WhatsApp message now.
-    Only output the message text. Nothing else.
+    CRITICAL INSTRUCTIONS:
+    - Write a natural WhatsApp message that sounds like a real person texting a customer
+    - Ask open-ended questions about their health, experience, or how the product is working
+    - Show genuine interest in their well-being
+    - If this is a health/care business, ask how they're feeling since the treatment
+    - The goal is to start a conversation, not deliver a monologue
+    - End with a question that invites them to reply
+    - Keep it under 80 words
+    - Match your agent personality perfectly
+    - Only output the message text. Nothing else.
     No quotes, no labels, no explanation.
     """
 
@@ -177,24 +198,35 @@ def generate_appointment_message(customer, business, agent, message_type):
 Customer Name: {customer.get('name', 'Customer')}
 Appointment: {customer.get('next_booking', 'No appointment set')}
 Business: {business.get('business_name', '')}
+Business Type: {business.get('business_type', '')}
 
 Today's date: {today}
 
 You are reminding the customer about their upcoming appointment.
-Be warm and helpful. Confirm the appointment time and ask if they need to reschedule.
+- Be warm and caring
+- Confirm the appointment time
+- Ask if they have any concerns or questions before the visit
+- Offer to reschedule if needed
+- End with a friendly, reassuring note
 Only output the message text. Nothing else. No quotes.
 """
     elif message_type == 'followup':
         prompt = f"""
 Customer Name: {customer.get('name', 'Customer')}
 Business: {business.get('business_name', '')}
+Business Type: {business.get('business_type', '')}
 Last appointment: {customer.get('next_booking', 'No appointment set')}
 Product purchased: {customer.get('product_purchased') or customer.get('product', '')}
 
 Today's date: {today}
 
-This customer had an appointment yesterday. Follow up with them — ask how it went,
-if they're feeling better, and if they need anything more. Be caring, not salesy.
+This customer had an appointment yesterday/earlier. Follow up with them:
+- Ask how they're feeling since the visit
+- Ask about their experience — was everything satisfactory?
+- If it was for treatment, ask how they're recovering
+- If they mentioned any issues, check up on those specifically
+- Offer further help if needed
+- Be caring and genuine, not salesy
 Only output the message text. Nothing else. No quotes.
 """
 
