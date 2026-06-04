@@ -3,9 +3,13 @@ from database.supabase_client import get_supabase
 from services.message_pipeline import enqueue, process_batch, retry_failed
 from services.scheduler_service import (
     get_customers_due_today,
+    get_customers_due_for_weekend,
+    get_customers_for_upcoming_festival,
     get_customers_with_appointment_today,
     get_customers_with_past_appointment,
+    get_customers_available_at_time,
 )
+from services.festival_utils import is_friday, is_weekend_approach
 from datetime import datetime, timedelta, timezone
 import logging
 
@@ -69,6 +73,58 @@ def enqueue_daily_sequences():
 
 
 @celery_app.task
+def enqueue_weekend_messages():
+    if not is_friday():
+        return {'status': 'skipped', 'reason': 'Not Friday'}
+    supabase = get_supabase()
+
+    weekend_customers = get_customers_due_for_weekend()
+    count = 0
+    for customer in weekend_customers:
+        try:
+            biz_id = customer.get('business_id')
+            if not biz_id:
+                continue
+            biz = supabase.table('business_profiles').select('*').eq('id', biz_id).execute()
+            if not biz.data:
+                continue
+            optimal_time = _get_optimal_time(customer)
+            enqueue(customer, biz.data[0], 'weekend_plan', scheduled_at=optimal_time)
+            count += 1
+        except Exception as e:
+            logger.error(f"Failed to enqueue weekend msg for {customer.get('id')}: {e}")
+
+    logger.info(f"Enqueued {count} weekend messages")
+    return {'weekend_messages': count}
+
+
+@celery_app.task
+def enqueue_festival_messages():
+    supabase = get_supabase()
+
+    festival_customers = get_customers_for_upcoming_festival()
+    count = 0
+    for customer, context in festival_customers:
+        try:
+            biz_id = customer.get('business_id')
+            if not biz_id:
+                continue
+            biz = supabase.table('business_profiles').select('*').eq('id', biz_id).execute()
+            if not biz.data:
+                continue
+            optimal_time = _get_optimal_time(customer)
+            enqueue(customer, biz.data[0], 'festival_greeting', scheduled_at=optimal_time,
+                    payload_extra={'festival': context['primary']['name'],
+                                   'festival_date': str(context['primary']['date'])})
+            count += 1
+        except Exception as e:
+            logger.error(f"Failed to enqueue festival msg for {customer.get('id')}: {e}")
+
+    logger.info(f"Enqueued {count} festival messages")
+    return {'festival_messages': count}
+
+
+@celery_app.task
 def process_pipeline_batch():
     processed = process_batch(batch_size=20)
     logger.info(f"Pipeline batch processed {processed} items")
@@ -112,6 +168,38 @@ def process_smart_timing():
         logger.info(f"Smart timing updated for {len(customers.data)} customers")
     except Exception as e:
         logger.error(f"Smart timing error: {e}")
+
+
+@celery_app.task
+def process_read_receipts():
+    supabase = get_supabase()
+    try:
+        read_msgs = supabase.table('messages').select(
+            'customer_id, timestamp'
+        ).eq('status', 'read').execute()
+
+        customer_hours = {}
+        for m in read_msgs.data:
+            cid = m['customer_id']
+            ts = m.get('timestamp')
+            if ts:
+                if isinstance(ts, str):
+                    ts = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+                hour = ts.hour
+                if cid not in customer_hours:
+                    customer_hours[cid] = []
+                customer_hours[cid].append(hour)
+
+        for cid, hours in customer_hours.items():
+            if len(hours) >= 2:
+                avg_hour = round(sum(hours) / len(hours))
+                supabase.table('customers').update({
+                    'best_contact_time': f"{avg_hour:02d}:00"
+                }).eq('id', cid).execute()
+
+        logger.info(f"Read receipt analysis: {len(customer_hours)} customers")
+    except Exception as e:
+        logger.error(f"Read receipt error: {e}")
 
 
 def _get_optimal_time(customer):

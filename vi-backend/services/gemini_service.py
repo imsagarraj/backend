@@ -252,6 +252,81 @@ Only output the message text. Nothing else. No quotes.
     return response.text.strip()
 
 
+def generate_weekend_message(customer, business, agent):
+    system_prompt = build_system_prompt(agent, business, customer)
+    today = datetime.now(timezone.utc).date().isoformat()
+
+    prompt = f"""
+Customer Name: {customer.get('name', 'Customer')}
+Business Name: {business.get('business_name', '')}
+Business Type: {business.get('business_type', '')}
+Product/Service: {customer.get('product_purchased') or customer.get('product', '')}
+Today's date: {today}
+
+CRITICAL INSTRUCTIONS:
+- Weekend is approaching! Send a friendly message about weekend plans
+- If cafe/restaurant: ask if they'd like to visit this weekend, mention any specials
+- If salon/spa: ask if they want to book a weekend appointment, relax and unwind
+- If entertainment/movie: ask if they're planning to catch a show or movie
+- If hotel: ask if they're planning a weekend getaway
+- Make it conversational and exciting, not pushy
+- Ask an open-ended question about their weekend plans
+- Let them know the business would love to host them
+- Keep under 80 words
+- Match your agent personality perfectly
+Only output the message text. Nothing else. No quotes.
+"""
+
+    config = types.GenerateContentConfig(
+        system_instruction=system_prompt,
+        max_output_tokens=200,
+        temperature=0.8
+    )
+    response = client.models.generate_content(
+        model=GEMINI_MODEL, contents=prompt, config=config
+    )
+    return response.text.strip()
+
+
+def generate_festival_message(customer, business, agent, festival_name):
+    system_prompt = build_system_prompt(agent, business, customer)
+    today = datetime.now(timezone.utc).date().isoformat()
+
+    prompt = f"""
+Customer Name: {customer.get('name', 'Customer')}
+Business Name: {business.get('business_name', '')}
+Business Type: {business.get('business_type', '')}
+Product/Service: {customer.get('product_purchased') or customer.get('product', '')}
+Upcoming Festival: {festival_name}
+Today's date: {today}
+
+CRITICAL INSTRUCTIONS:
+- Send a warm festive greeting for {festival_name}
+- Wish them well for the festival
+- If relevant to the business, suggest how they can celebrate or avail services
+  * Salon/spa: suggest a festive makeover or grooming package
+  * Restaurant/cafe: invite them for a festive meal with family
+  * Store: suggest festive shopping or gift ideas
+  * Event: ask if they need help planning celebrations
+  * Gym/fitness: suggest staying healthy during festivities
+- Make it warm and personal, not salesy
+- Reference the festival naturally
+- Keep under 80 words
+- Match your agent personality perfectly
+Only output the message text. Nothing else. No quotes.
+"""
+
+    config = types.GenerateContentConfig(
+        system_instruction=system_prompt,
+        max_output_tokens=200,
+        temperature=0.8
+    )
+    response = client.models.generate_content(
+        model=GEMINI_MODEL, contents=prompt, config=config
+    )
+    return response.text.strip()
+
+
 def detect_personality(message_text):
     text = message_text.lower()
     tags = []

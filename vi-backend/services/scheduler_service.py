@@ -1,5 +1,13 @@
 from datetime import date, datetime, timedelta, timezone
 from database.supabase_client import get_supabase
+from services.festival_utils import (
+    get_next_sequence_day_varied, get_upcoming_festivals,
+    is_weekend_approach, should_send_weekend_message,
+    get_festival_message_context, is_friday,
+)
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def get_customers_due_today():
@@ -21,10 +29,58 @@ def get_customers_due_today():
         days_since = (today - pd).days
         current_seq = c.get('current_sequence_day', 0)
 
-        for trigger_day, next_seq in [(1, 0), (3, 1), (15, 3), (30, 15)]:
-            if days_since == trigger_day and current_seq == next_seq:
-                due.append((c, trigger_day))
-                break
+        next_seq = get_next_sequence_day_varied(current_seq)
+        if next_seq != 'completed' and days_since >= next_seq and current_seq < next_seq:
+            due.append((c, next_seq))
+            continue
+
+        if current_seq >= 28 and days_since >= 30:
+            due.append((c, 30))
+
+    return due
+
+
+def get_customers_due_for_weekend():
+    supabase = get_supabase()
+    customers = supabase.table('customers').select('*').eq('status', 'active').execute()
+
+    due = []
+    for c in customers.data:
+        biz_id = c.get('business_id')
+        if not biz_id:
+            continue
+        biz = supabase.table('business_profiles').select('business_type').eq('id', biz_id).execute()
+        if not biz.data:
+            continue
+        biz_type = biz.data[0].get('business_type', '')
+        if should_send_weekend_message(biz_type):
+            due.append(c)
+
+    return due
+
+
+def get_customers_for_upcoming_festival():
+    supabase = get_supabase()
+    customers = supabase.table('customers').select('*').eq('status', 'active').execute()
+
+    due = []
+    processed_biz = {}
+
+    for c in customers.data:
+        biz_id = c.get('business_id')
+        if not biz_id:
+            continue
+        if biz_id in processed_biz:
+            context = processed_biz[biz_id]
+        else:
+            biz = supabase.table('business_profiles').select('*').eq('id', biz_id).execute()
+            if not biz.data:
+                continue
+            context = get_festival_message_context(biz.data[0], c)
+            processed_biz[biz_id] = context
+
+        if context:
+            due.append((c, context))
 
     return due
 
@@ -56,11 +112,30 @@ def get_customers_with_past_appointment():
 
 
 def get_next_sequence_day(current_day):
-    next_days = {0: 1, 1: 3, 3: 15, 15: 30}
-    return next_days.get(current_day, 'completed')
+    return get_next_sequence_day_varied(current_day)
 
 
 def get_template_name_for_day(sequence_day):
     templates = {0: 'vi_day1_welcome', 1: 'vi_day3_checkin',
                  3: 'vi_day15_followup', 15: 'vi_day30_upsell'}
     return templates.get(sequence_day)
+
+
+def get_customers_available_at_time(target_hour):
+    supabase = get_supabase()
+    customers = supabase.table('customers').select('*').eq('status', 'active').execute()
+
+    matched = []
+    for c in customers.data:
+        bct = c.get('best_contact_time')
+        if bct:
+            try:
+                hour = int(bct.split(':')[0])
+                if hour == target_hour:
+                    matched.append(c)
+                    continue
+            except (ValueError, TypeError):
+                pass
+        matched.append(c)
+
+    return matched

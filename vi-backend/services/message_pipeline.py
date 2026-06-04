@@ -6,7 +6,10 @@ Stages: pending_schedule -> pending_ai_gen -> ready_to_send -> sending -> sent
 
 from database.supabase_client import get_supabase
 from services.whatsapp_service import send_text_message
-from services.gemini_service import generate_followup_message, generate_appointment_message
+from services.gemini_service import (
+    generate_followup_message, generate_appointment_message,
+    generate_weekend_message, generate_festival_message,
+)
 from database.seed import get_active_agent
 from datetime import datetime, timezone
 import logging
@@ -24,12 +27,21 @@ STAGES = [
 ]
 
 
-def enqueue(customer, business, message_type, sequence_day=None, scheduled_at=None):
+def enqueue(customer, business, message_type, sequence_day=None, scheduled_at=None, payload_extra=None):
     supabase = get_supabase()
     if scheduled_at is None:
         scheduled_at = datetime.now(timezone.utc).isoformat()
     elif isinstance(scheduled_at, datetime):
         scheduled_at = scheduled_at.isoformat()
+
+    payload = {
+        'customer_name': customer.get('name'),
+        'customer_phone': customer.get('phone'),
+        'product': customer.get('product') or customer.get('product_purchased', ''),
+        'purchase_date': str(customer.get('purchase_date', '')),
+    }
+    if payload_extra:
+        payload.update(payload_extra)
 
     row = {
         'customer_id': customer['id'],
@@ -38,12 +50,7 @@ def enqueue(customer, business, message_type, sequence_day=None, scheduled_at=No
         'stage': 'pending_schedule',
         'sequence_day': sequence_day,
         'scheduled_at': scheduled_at,
-        'payload': {
-            'customer_name': customer.get('name'),
-            'customer_phone': customer.get('phone'),
-            'product': customer.get('product') or customer.get('product_purchased', ''),
-            'purchase_date': str(customer.get('purchase_date', '')),
-        },
+        'payload': payload,
     }
     result = supabase.table('message_queue').insert(row).execute()
     return result.data[0] if result.data else None
@@ -110,6 +117,11 @@ def process_batch(batch_size=20):
             elif item['message_type'] in ('appointment_reminder', 'appointment_followup'):
                 sub_type = 'reminder' if item['message_type'] == 'appointment_reminder' else 'followup'
                 text = generate_appointment_message(customer, business, agent, sub_type)
+            elif item['message_type'] == 'weekend_plan':
+                text = generate_weekend_message(customer, business, agent)
+            elif item['message_type'] == 'festival_greeting':
+                festival_name = item.get('payload', {}).get('festival', '')
+                text = generate_festival_message(customer, business, agent, festival_name)
             else:
                 _handle_failure(item, f'Unknown message_type: {item["message_type"]}')
                 continue
