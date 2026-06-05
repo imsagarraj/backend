@@ -167,6 +167,28 @@
   color: #fff;
 }
 
+.syncBtn {
+  padding: 7px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-accent);
+  background: var(--color-accent-dim);
+  color: var(--color-accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.syncBtn:hover {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.syncBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 @media (max-width: 768px) {
   .twoCol { grid-template-columns: 1fr; }
 }

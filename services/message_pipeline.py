@@ -74,7 +74,14 @@ def process_batch(batch_size=20):
             advance(item['id'], 'sending')
             phone = item['payload'].get('customer_phone', '')
             text = item.get('ai_generated_text', '')
-            result = send_text_message(phone, text)
+
+            pn_id = None
+            if item.get('business_id'):
+                bp = supabase.table('business_profiles').select('meta_phone_number_id').eq('id', item['business_id']).execute()
+                if bp.data and bp.data[0].get('meta_phone_number_id'):
+                    pn_id = bp.data[0]['meta_phone_number_id']
+
+            result = send_text_message(phone, text, phone_number_id=pn_id)
             if result.get('status') == 'success':
                 advance(item['id'], 'sent', {
                     'meta_message_id': result.get('message_id', ''),

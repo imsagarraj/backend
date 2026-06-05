@@ -67,3 +67,7 @@ export function deleteCustomer(id) {
 export function getCustomerDetail(id) {
   return request(`/customers/${id}`)
 }
+
+export function syncWhatsappNumber(businessId) {
+  return request(`/businesses/${businessId}/whatsapp/sync`, { method: 'POST' })
+}

@@ -28,11 +28,18 @@ def send_message(data: SendMessage):
         raise HTTPException(status_code=404, detail="Customer not found")
 
     customer = customer.data[0]
-    send_result = send_text_message(customer['phone'], data.message_text)
+    biz_id = customer.get('business_id')
+    pn_id = None
+    if biz_id:
+        biz = supabase.table('business_profiles').select('meta_phone_number_id').eq('id', biz_id).execute()
+        if biz.data and biz.data[0].get('meta_phone_number_id'):
+            pn_id = biz.data[0]['meta_phone_number_id']
+
+    send_result = send_text_message(customer['phone'], data.message_text, phone_number_id=pn_id)
 
     msg = supabase.table('messages').insert({
         'customer_id': customer['id'],
-        'business_id': customer.get('business_id'),
+        'business_id': biz_id,
         'direction': 'sent',
         'content': data.message_text,
         'status': 'sent',

@@ -35,6 +35,9 @@ class BusinessProfileData:
     business_name: Optional[str] = None
     business_type: Optional[str] = None
     active_agent_id: Optional[int] = None
+    whatsapp_phone: Optional[str] = None
+    meta_phone_number_id: Optional[str] = None
+    whatsapp_verified: Optional[bool] = False
 
 
 @dataclass

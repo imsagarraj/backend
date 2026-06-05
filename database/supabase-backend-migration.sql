@@ -74,6 +74,12 @@ CREATE POLICY "Conversation history anon access" ON conversation_history
 ALTER TABLE business_profiles
   ADD COLUMN IF NOT EXISTS active_agent_id BIGINT REFERENCES agents(id);
 
+-- Add WhatsApp columns for per-business WhatsApp numbers
+ALTER TABLE business_profiles
+  ADD COLUMN IF NOT EXISTS whatsapp_phone TEXT,
+  ADD COLUMN IF NOT EXISTS meta_phone_number_id TEXT,
+  ADD COLUMN IF NOT EXISTS whatsapp_verified BOOLEAN DEFAULT FALSE;
+
 ALTER TABLE customers
   ADD COLUMN IF NOT EXISTS response_count INTEGER DEFAULT 0,
   ADD COLUMN IF NOT EXISTS personality_profile TEXT DEFAULT 'unknown',

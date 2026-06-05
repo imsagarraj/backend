@@ -7,16 +7,22 @@ env_path = Path(__file__).resolve().parent.parent / '.env'
 load_dotenv(env_path)
 
 ACCESS_TOKEN = os.getenv('META_ACCESS_TOKEN')
-PHONE_NUMBER_ID = os.getenv('META_PHONE_NUMBER_ID')
-API_URL = f'https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages'
-
-HEADERS = {
-    'Authorization': f'Bearer {ACCESS_TOKEN}',
-    'Content-Type': 'application/json',
-}
+FALLBACK_PHONE_NUMBER_ID = os.getenv('META_PHONE_NUMBER_ID')
 
 
-def send_text_message(phone, message):
+def _get_headers():
+    return {
+        'Authorization': f'Bearer {ACCESS_TOKEN}',
+        'Content-Type': 'application/json',
+    }
+
+
+def _get_api_url(phone_number_id=None):
+    pid = phone_number_id or FALLBACK_PHONE_NUMBER_ID
+    return f'https://graph.facebook.com/v22.0/{pid}/messages'
+
+
+def send_text_message(phone, message, phone_number_id=None):
     if phone.startswith('whatsapp:'):
         phone = phone.replace('whatsapp:', '')
     to = phone.lstrip('+')
@@ -30,7 +36,7 @@ def send_text_message(phone, message):
     }
 
     try:
-        res = requests.post(API_URL, json=payload, headers=HEADERS)
+        res = requests.post(_get_api_url(phone_number_id), json=payload, headers=_get_headers())
         data = res.json()
         msg_id = data.get('messages', [{}])[0].get('id', '')
         return {"status": "success" if res.ok else "failed", "message_id": msg_id, "response": data}
@@ -38,7 +44,7 @@ def send_text_message(phone, message):
         return {"status": "failed", "error": str(e)}
 
 
-def send_template_message(phone, template_name, params):
+def send_template_message(phone, template_name, params, phone_number_id=None):
     if phone.startswith('whatsapp:'):
         phone = phone.replace('whatsapp:', '')
     to = phone.lstrip('+')
@@ -61,7 +67,7 @@ def send_template_message(phone, template_name, params):
     }
 
     try:
-        res = requests.post(API_URL, json=payload, headers=HEADERS)
+        res = requests.post(_get_api_url(phone_number_id), json=payload, headers=_get_headers())
         data = res.json()
         msg_id = data.get('messages', [{}])[0].get('id', '')
         return {"status": "success" if res.ok else "failed", "message_id": msg_id, "response": data}
@@ -69,13 +75,13 @@ def send_template_message(phone, template_name, params):
         return {"status": "failed", "error": str(e)}
 
 
-def mark_message_read(message_id):
+def mark_message_read(message_id, phone_number_id=None):
     payload = {
         'messaging_product': 'whatsapp',
         'status': 'read',
         'message_id': message_id,
     }
     try:
-        requests.post(API_URL, json=payload, headers=HEADERS)
+        requests.post(_get_api_url(phone_number_id), json=payload, headers=_get_headers())
     except Exception:
         pass

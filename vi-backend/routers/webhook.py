@@ -8,7 +8,7 @@ from database.supabase_client import get_supabase
 from database.seed import get_active_agent
 from services.whatsapp_service import send_text_message
 from services.gemini_service import generate_reply, detect_personality
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 env_path = Path(__file__).resolve().parent.parent / '.env'
 load_dotenv(env_path)
@@ -44,11 +44,6 @@ async def receive_webhook(request: Request):
             changes = entry.get('changes', [])
             for change in changes:
                 value = change.get('value', {})
-
-                statuses = value.get('statuses', [])
-                for status in statuses:
-                    await handle_status_update(status)
-
                 messages = value.get('messages', [])
                 for msg in messages:
                     if msg.get('type') == 'text':
@@ -60,35 +55,6 @@ async def receive_webhook(request: Request):
         logger.error(f"Error processing webhook: {e}")
 
     return {"status": "ok"}
-
-
-async def handle_status_update(status):
-    supabase = get_supabase()
-    try:
-        msg_id = status.get('id')
-        status_type = status.get('status')
-        timestamp = status.get('timestamp')
-        recipient_id = status.get('recipient_id')
-
-        if not msg_id:
-            return
-
-        if status_type in ('delivered', 'read'):
-            supabase.table('messages').update({
-                'status': status_type,
-            }).eq('meta_message_id', msg_id).execute()
-
-        if status_type == 'read' and recipient_id and timestamp:
-            customers = supabase.table('customers').select('*').eq('phone', recipient_id).execute()
-            if customers.data:
-                customer = customers.data[0]
-                ts = datetime.fromtimestamp(timestamp, tz=timezone.utc)
-                ist = ts + timedelta(hours=5, minutes=30)
-                supabase.table('customers').update({
-                    'best_contact_time': f"{ist.hour:02d}:00",
-                }).eq('id', customer['id']).execute()
-    except Exception as e:
-        logger.error(f"Error handling status update: {e}")
 
 
 async def handle_incoming_message(phone, message_text, message_id):
@@ -146,7 +112,8 @@ async def handle_incoming_message(phone, message_text, message_id):
 
         reply = generate_reply(customer, business, agent, message_text, history.data, supabase)
 
-        send_result = send_text_message(phone, reply)
+        pn_id = business.get('meta_phone_number_id')
+        send_result = send_text_message(phone, reply, phone_number_id=pn_id)
 
         supabase.table('messages').insert({
             'customer_id': customer['id'],

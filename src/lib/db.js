@@ -48,9 +48,21 @@ export async function fetchBusinessProfile() {
 }
 
 export async function upsertBusinessProfile(profile) {
+  const allowed = [
+    'user_id', 'business_name', 'business_type', 'email', 'phone', 'whatsapp',
+    'gst', 'address', 'city', 'state', 'pincode', 'website', 'description',
+    'owner_name', 'owner_phone', 'owner_email', 'owner_designation',
+    'owner_dob', 'owner_gender', 'working_days', 'opening_time', 'closing_time',
+    'whatsapp_phone', 'whatsapp_verified', 'meta_phone_number_id',
+  ]
+  const payload = {}
+  for (const key of allowed) {
+    if (key in profile) payload[key] = profile[key]
+  }
+
   const { data, error } = await supabase
     .from('business_profiles')
-    .upsert(profile, { onConflict: 'user_id' })
+    .upsert(payload, { onConflict: 'user_id' })
     .select()
     .single()
   if (error) throw error

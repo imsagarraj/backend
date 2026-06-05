@@ -112,7 +112,8 @@ async def handle_incoming_message(phone, message_text, message_id):
 
         reply = generate_reply(customer, business, agent, message_text, history.data, supabase)
 
-        send_result = send_text_message(phone, reply)
+        pn_id = business.get('meta_phone_number_id')
+        send_result = send_text_message(phone, reply, phone_number_id=pn_id)
 
         supabase.table('messages').insert({
             'customer_id': customer['id'],
