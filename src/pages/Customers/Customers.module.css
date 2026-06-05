@@ -268,6 +268,9 @@
   border-radius: 99px;
 }
 
+.statusActive { background: rgba(16,185,129,0.1); color: #10b981; }
+.statusPaused { background: rgba(245,158,11,0.1); color: #f59e0b; }
+.statusCompleted { background: rgba(99,102,241,0.1); color: #6366f1; }
 .statusReplied { background: rgba(16,185,129,0.1); color: #10b981; }
 .statusNoReply { background: rgba(239,68,68,0.1); color: #ef4444; }
 .statusPending { background: rgba(107,114,128,0.1); color: #6b7280; }

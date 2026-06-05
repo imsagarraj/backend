@@ -24,6 +24,7 @@ const stageColors = {
 }
 
 const statusColors = {
+  active: 'statusActive', paused: 'statusPaused', completed: 'statusCompleted',
   Replied: 'statusReplied', 'No Reply': 'statusNoReply', Pending: 'statusPending',
 }
 
@@ -109,7 +110,7 @@ export default function Customers() {
         notes: form.notes.trim() || null,
         start_sequence: form.startSequence,
         stage: 'Day 1',
-        status: 'Pending',
+        status: 'active',
       })
       setShowAddModal(false)
       setForm(emptyForm)
@@ -177,12 +178,12 @@ export default function Customers() {
             </select>
           </div>
           <div>
-            <label className={styles.filterLabel}>Response Status</label>
+            <label className={styles.filterLabel}>Status</label>
             <select className={styles.filterSelect} value={filters.status} onChange={e => setFilters(f => ({ ...f, status: e.target.value }))}>
               <option value="">All</option>
-              <option>Replied</option>
-              <option>No Reply</option>
-              <option>Pending</option>
+              <option>active</option>
+              <option>paused</option>
+              <option>completed</option>
             </select>
           </div>
           <div>
