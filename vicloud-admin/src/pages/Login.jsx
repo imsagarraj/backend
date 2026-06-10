@@ -17,7 +17,7 @@ export default function Login() {
     const result = await signIn(email, password)
     setLoading(false)
     if (result.error) {
-      setError(result.error.message)
+      setError('Invalid email or password')
     } else {
       navigate('/')
     }

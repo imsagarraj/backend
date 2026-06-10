@@ -1,9 +1,20 @@
+import { supabase } from './supabase'
+
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1'
 
+async function authHeaders() {
+  const { data: { session } } = await supabase.auth.getSession()
+  return {
+    'Content-Type': 'application/json',
+    ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
+  }
+}
+
 async function request(path, options = {}) {
+  const headers = await authHeaders()
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
+    headers: { ...headers, ...options.headers },
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
@@ -12,12 +23,12 @@ async function request(path, options = {}) {
   return res.json()
 }
 
-export function getDashboard(businessId) {
-  return request(`/dashboard?business_id=${businessId}`)
+export function getDashboard() {
+  return request('/dashboard')
 }
 
-export function getAnalytics(businessId, period = '30d') {
-  return request(`/analytics?business_id=${businessId}&period=${period}`)
+export function getAnalytics(period = '30d') {
+  return request(`/analytics?period=${period}`)
 }
 
 export function listAgents() {
@@ -42,8 +53,8 @@ export function sendMessage(customerId, messageText) {
   })
 }
 
-export function listCustomers(businessId) {
-  return request(`/customers?business_id=${businessId}`)
+export function listCustomers() {
+  return request('/customers')
 }
 
 export function createCustomer(data) {

@@ -1,5 +1,26 @@
 -- Run this in your Supabase SQL Editor after the existing tables are created.
--- Adds backend-specific tables + RLS policies for anon key access
+-- Adds backend-specific tables + proper RLS policies
+
+-- ============================================================
+-- ADMIN USERS TABLE
+-- ============================================================
+CREATE TABLE IF NOT EXISTS admin_users (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id UUID UNIQUE NOT NULL REFERENCES auth.users(id),
+  email TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'admin' CHECK (role IN ('super_admin', 'admin', 'support')),
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;
+
+-- Allow service_role key (backend) to access admin_users
+DROP POLICY IF EXISTS "Admin users service role only" ON admin_users;
+CREATE POLICY "Admin users service role only"
+  ON admin_users
+  USING (true);
 
 -- ============================================================
 -- AGENTS TABLE
@@ -18,9 +39,9 @@ CREATE TABLE IF NOT EXISTS agents (
 
 ALTER TABLE agents ENABLE ROW LEVEL SECURITY;
 
--- Allow anon key to read and insert agents (backend needs both)
-DROP POLICY IF EXISTS "Agents anon access" ON agents;
-CREATE POLICY "Agents anon access" ON agents
+-- Service role access (backend uses service key)
+DROP POLICY IF EXISTS "Agents service access" ON agents;
+CREATE POLICY "Agents service access" ON agents
   FOR ALL
   USING (true)
   WITH CHECK (true);
@@ -43,8 +64,8 @@ CREATE TABLE IF NOT EXISTS messages (
 
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Messages anon access" ON messages;
-CREATE POLICY "Messages anon access" ON messages
+DROP POLICY IF EXISTS "Messages service access" ON messages;
+CREATE POLICY "Messages service access" ON messages
   FOR ALL
   USING (true)
   WITH CHECK (true);
@@ -62,8 +83,8 @@ CREATE TABLE IF NOT EXISTS conversation_history (
 
 ALTER TABLE conversation_history ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Conversation history anon access" ON conversation_history;
-CREATE POLICY "Conversation history anon access" ON conversation_history
+DROP POLICY IF EXISTS "Conversation history service access" ON conversation_history;
+CREATE POLICY "Conversation history service access" ON conversation_history
   FOR ALL
   USING (true)
   WITH CHECK (true);
@@ -117,8 +138,8 @@ CREATE TABLE IF NOT EXISTS message_queue (
 
 ALTER TABLE message_queue ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Message queue anon access" ON message_queue;
-CREATE POLICY "Message queue anon access" ON message_queue
+DROP POLICY IF EXISTS "Message queue service access" ON message_queue;
+CREATE POLICY "Message queue service access" ON message_queue
   FOR ALL USING (true) WITH CHECK (true);
 
 CREATE INDEX IF NOT EXISTS idx_message_queue_stage ON message_queue(stage);

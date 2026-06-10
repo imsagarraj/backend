@@ -2,6 +2,7 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AppProvider } from './context/AppContext'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import Login from './pages/Login/Login'
+import ResetPassword from './pages/ResetPassword/ResetPassword'
 import Layout from './components/Layout/Layout'
 import Dashboard from './pages/Dashboard/Dashboard'
 import Customers from './pages/Customers/Customers'
@@ -81,6 +82,7 @@ function AppRoutes() {
           </PublicRoute>
         }
       />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route
         path="/onboarding"
         element={

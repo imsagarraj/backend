@@ -1,13 +1,19 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from database.supabase_client import get_supabase
+from dependencies import get_current_user, AuthUser
 from datetime import datetime, timedelta, timezone
 
 router = APIRouter()
 
 
 @router.get("/analytics")
-def get_analytics(business_id: int, period: str = "30d"):
+def get_analytics(period: str = "30d", user: AuthUser = Depends(get_current_user)):
     supabase = get_supabase()
+    biz = supabase.table('business_profiles').select('id').eq('user_id', user.id).execute()
+    if not biz.data:
+        raise HTTPException(status_code=404, detail="Business profile not found")
+    business_id = biz.data[0]['id']
+
     days_map = {"7d": 7, "30d": 30, "90d": 90}
     num_days = days_map.get(period, 30)
     cutoff = (datetime.now(timezone.utc) - timedelta(days=num_days)).isoformat()

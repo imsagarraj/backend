@@ -1,40 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from database.supabase_client import get_supabase
+from dependencies import get_admin_user, AuthUser
 from services.message_pipeline import get_status, retry_failed, get_business_pipeline
 from datetime import datetime, timezone
-from supabase import create_client
-import os
 
 router = APIRouter()
 
 
-async def verify_admin(request: Request):
-    ADMIN_EMAILS = os.getenv('ADMIN_EMAILS', '').split(',')
-    auth_header = request.headers.get('Authorization', '')
-    if not auth_header.startswith('Bearer '):
-        raise HTTPException(status_code=401, detail="Missing auth token")
-
-    supabase = create_client(
-        os.getenv('VITE_SUPABASE_URL'),
-        os.getenv('VITE_SUPABASE_ANON_KEY')
-    )
-    token = auth_header.replace('Bearer ', '')
-    user = supabase.auth.get_user(token)
-    email = user.user.email if user.user else None
-
-    if not email or email not in ADMIN_EMAILS:
-        raise HTTPException(status_code=403, detail="Admin access required")
-
-    return user.user
-
-
 @router.get("/admin/verify")
-def admin_verify(admin=Depends(verify_admin)):
+def admin_verify(admin: AuthUser = Depends(get_admin_user)):
     return {"is_admin": True, "email": admin.email}
 
 
 @router.get("/admin/businesses")
-def list_businesses(admin=Depends(verify_admin)):
+def list_businesses(admin: AuthUser = Depends(get_admin_user)):
     supabase = get_supabase()
     businesses = supabase.table('business_profiles').select('*').order('created_at', desc=True).execute()
 
@@ -63,7 +42,7 @@ def list_businesses(admin=Depends(verify_admin)):
 
 
 @router.get("/admin/businesses/{business_id}")
-def get_business_detail(business_id: int, admin=Depends(verify_admin)):
+def get_business_detail(business_id: int, admin: AuthUser = Depends(get_admin_user)):
     supabase = get_supabase()
     biz = supabase.table('business_profiles').select('*').eq('id', business_id).execute()
     if not biz.data:
@@ -89,12 +68,12 @@ def get_business_detail(business_id: int, admin=Depends(verify_admin)):
 
 
 @router.get("/admin/pipeline")
-def get_pipeline_status(business_id: int = None, admin=Depends(verify_admin)):
+def get_pipeline_status(business_id: int = None, admin: AuthUser = Depends(get_admin_user)):
     return get_status(business_id)
 
 
 @router.post("/admin/pipeline/{item_id}/retry")
-def retry_pipeline_item(item_id: int, admin=Depends(verify_admin)):
+def retry_pipeline_item(item_id: int, admin: AuthUser = Depends(get_admin_user)):
     supabase = get_supabase()
     item = supabase.table('message_queue').select('*').eq('id', item_id).execute()
     if not item.data:
@@ -111,19 +90,19 @@ def retry_pipeline_item(item_id: int, admin=Depends(verify_admin)):
 
 
 @router.post("/admin/pipeline/retry-all")
-def retry_all_failed(admin=Depends(verify_admin)):
+def retry_all_failed(admin: AuthUser = Depends(get_admin_user)):
     return retry_failed()
 
 
 @router.get("/admin/agents")
-def list_agents(admin=Depends(verify_admin)):
+def list_agents(admin: AuthUser = Depends(get_admin_user)):
     supabase = get_supabase()
     agents = supabase.table('agents').select('*').execute()
     return agents.data
 
 
 @router.put("/admin/agents/{agent_id}")
-def update_agent(agent_id: int, data: dict, admin=Depends(verify_admin)):
+def update_agent(agent_id: int, data: dict, admin: AuthUser = Depends(get_admin_user)):
     supabase = get_supabase()
     allowed = {'agent_name', 'personality_description', 'system_prompt', 'tone_tags', 'is_active'}
     updates = {k: v for k, v in data.items() if k in allowed}

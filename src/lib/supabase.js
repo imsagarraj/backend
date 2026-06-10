@@ -11,5 +11,12 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(
   supabaseUrl || 'http://localhost:54321',
-  supabaseAnonKey || 'public-anon-key'
+  supabaseAnonKey || 'public-anon-key',
+  {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+    },
+  }
 )

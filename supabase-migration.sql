@@ -1,5 +1,29 @@
--- Run this in your Supabase SQL Editor to create the customers table
-CREATE TABLE customers (
+-- Run this in your Supabase SQL Editor to create tables and policies
+
+-- ============================================================
+-- ADMIN USERS TABLE (for DB-backed admin access control)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS admin_users (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id UUID UNIQUE NOT NULL REFERENCES auth.users(id),
+  email TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'admin' CHECK (role IN ('super_admin', 'admin', 'support')),
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;
+
+-- Only allow service_role key (backend) to access admin_users
+CREATE POLICY "Admin users service role only"
+  ON admin_users
+  USING (true);
+
+-- ============================================================
+-- CUSTOMERS TABLE
+-- ============================================================
+CREATE TABLE IF NOT EXISTS customers (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES auth.users(id),
   name TEXT NOT NULL,
@@ -26,8 +50,10 @@ CREATE POLICY "Users can manage their own customers"
   ON customers
   USING (auth.uid() = user_id);
 
--- Business profiles table
-CREATE TABLE business_profiles (
+-- ============================================================
+-- BUSINESS PROFILES TABLE
+-- ============================================================
+CREATE TABLE IF NOT EXISTS business_profiles (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   user_id UUID UNIQUE NOT NULL REFERENCES auth.users(id),
   business_name TEXT,

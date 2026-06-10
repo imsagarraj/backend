@@ -25,7 +25,7 @@ export default function Login() {
 
     const result = await signInWithEmail(email, password)
     if (result.error) {
-      setError(result.error.message)
+      setError('Invalid email or password')
       setLoading(false)
       return
     }
@@ -42,7 +42,7 @@ export default function Login() {
 
     const result = await resetPassword(resetEmail)
     if (result.error) {
-      setError(result.error.message)
+      setError('Could not send reset email. Please check the email address.')
       setResetLoading(false)
     } else {
       setResetSent(true)

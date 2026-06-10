@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from database.supabase_client import get_supabase
+from dependencies import get_current_user, AuthUser
 from services.message_pipeline import get_status
 from datetime import datetime, timedelta, timezone, date
 
@@ -7,8 +8,13 @@ router = APIRouter()
 
 
 @router.get("/dashboard")
-def get_dashboard(business_id: int):
+def get_dashboard(user: AuthUser = Depends(get_current_user)):
     supabase = get_supabase()
+    biz = supabase.table('business_profiles').select('id').eq('user_id', user.id).execute()
+    if not biz.data:
+        raise HTTPException(status_code=404, detail="Business profile not found")
+    business_id = biz.data[0]['id']
+
     today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     week_ago = today - timedelta(days=7)
     today_str = today.isoformat()
@@ -83,10 +89,6 @@ def get_dashboard(business_id: int):
             "stage": item['stage'],
             "scheduled_at": item.get('scheduled_at'),
         })
-
-    biz = supabase.table('business_profiles').select('active_agent_id').eq(
-        'id', business_id
-    ).execute()
 
     agent_info = None
     if biz.data and biz.data[0].get('active_agent_id'):
