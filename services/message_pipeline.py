@@ -171,10 +171,40 @@ def get_status(business_id=None):
 
     failed_items = failed_query.execute()
 
+    items_query = supabase.table('message_queue').select(
+        'id, customer_id, business_id, message_type, stage, sequence_day, error_log, retry_count, max_retries, scheduled_at, created_at, updated_at'
+    ).order('created_at', desc=True).limit(200)
+
+    if business_id:
+        items_query = items_query.eq('business_id', business_id)
+
+    items_data = items_query.execute()
+    items = []
+    for item in items_data.data:
+        customer_name = None
+        customer_phone = None
+        if item.get('customer_id'):
+            c = supabase.table('customers').select('name, phone').eq('id', item['customer_id']).execute()
+            if c.data:
+                customer_name = c.data[0].get('name')
+                customer_phone = c.data[0].get('phone')
+        business_name = None
+        if item.get('business_id'):
+            b = supabase.table('business_profiles').select('business_name').eq('id', item['business_id']).execute()
+            if b.data:
+                business_name = b.data[0].get('business_name')
+        items.append({
+            **item,
+            'customer_name': customer_name,
+            'customer_phone': customer_phone,
+            'business_name': business_name,
+        })
+
     return {
         'counts': counts,
         'total': sum(counts.values()),
         'recent_failures': failed_items.data,
+        'items': items,
     }
 
 
