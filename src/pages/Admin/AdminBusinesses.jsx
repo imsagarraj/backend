@@ -10,7 +10,7 @@ export default function AdminBusinesses() {
   const [search, setSearch] = useState('')
 
   useEffect(() => {
-    listBusinesses().then(setBusinesses).catch(console.error).finally(() => setLoading(false))
+    listBusinesses().then(data => setBusinesses(data.businesses || data)).catch(console.error).finally(() => setLoading(false))
   }, [])
 
   const filtered = businesses.filter(b =>
