@@ -115,6 +115,17 @@ def retry_pipeline_item(item_id: int, admin: AuthUser = Depends(get_admin_user))
     return {'status': 'retried', 'item_id': item_id}
 
 
+@router.post("/admin/fix-orphans")
+def fix_orphan_customers(admin: AuthUser = Depends(get_admin_user)):
+    supabase = get_supabase()
+    biz = supabase.table('business_profiles').select('id').limit(1).execute()
+    if not biz.data:
+        return {'fixed': 0, 'error': 'No business profiles found'}
+    biz_id = biz.data[0]['id']
+    result = supabase.table('customers').update({'business_id': biz_id}).is_('business_id', 'null').execute()
+    return {'fixed': len(result.data or [])}
+
+
 @router.post("/admin/pipeline/retry-all")
 def retry_all_failed(admin: AuthUser = Depends(get_admin_user)):
     return retry_failed()

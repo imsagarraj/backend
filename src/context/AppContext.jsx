@@ -65,10 +65,10 @@ export function AppProvider({ children }) {
   }, [business?.id])
 
   const addCustomer = useCallback(async (customerData) => {
-    const newCustomer = await dbAdd({ ...customerData, user_id: authUser.id })
+    const newCustomer = await dbAdd({ ...customerData, user_id: authUser.id, business_id: business?.id })
     setCustomers(prev => [newCustomer, ...prev])
     return newCustomer
-  }, [authUser])
+  }, [authUser, business])
 
   const updateCustomer = useCallback(async (id, updates) => {
     const updated = await dbUpdate(id, updates)
