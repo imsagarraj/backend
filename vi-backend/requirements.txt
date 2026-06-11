@@ -7,6 +7,7 @@ google-genai
 requests
 python-dotenv
 pydantic
+email-validator
 emoji
 python-multipart
 supervisor
