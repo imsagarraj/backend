@@ -60,6 +60,14 @@ def on_startup():
         seed_admin_users()
     except Exception as e:
         print(f"Seed admin users warning (non-fatal): {e}")
+    try:
+        from database.supabase_client import get_supabase
+        supabase = get_supabase()
+        biz = supabase.table('business_profiles').select('id').limit(1).execute()
+        if biz.data:
+            supabase.table('customers').update({'business_id': biz.data[0]['id']}).is_('business_id', 'null').execute()
+    except Exception as e:
+        print(f"Fix orphan customers warning (non-fatal): {e}")
 
 
 @app.get("/")
