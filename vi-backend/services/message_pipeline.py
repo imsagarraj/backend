@@ -151,31 +151,79 @@ def retry_failed():
 
 
 def get_status(business_id=None):
-    supabase = get_supabase()
-    query = supabase.table('message_queue').select('stage', count='exact')
+    try:
+        supabase = get_supabase()
+        query = supabase.table('message_queue').select('stage', count='exact')
 
-    if business_id:
-        query = query.eq('business_id', business_id)
+        if business_id:
+            query = query.eq('business_id', business_id)
 
-    all_items = query.execute()
-    counts = {s: 0 for s in STAGES}
-    for item in all_items.data:
-        counts[item['stage']] = counts.get(item['stage'], 0) + 1
+        all_items = query.execute()
+        counts = {s: 0 for s in STAGES}
+        for item in all_items.data:
+            counts[item['stage']] = counts.get(item['stage'], 0) + 1
 
-    failed_query = supabase.table('message_queue').select(
-        'id, customer_id, business_id, message_type, error_log, retry_count, created_at, updated_at'
-    ).eq('stage', 'failed').order('updated_at', desc=True).limit(20)
+        failed_query = supabase.table('message_queue').select(
+            'id, customer_id, business_id, message_type, error_log, retry_count, created_at, updated_at'
+        ).eq('stage', 'failed').order('updated_at', desc=True).limit(20)
 
-    if business_id:
-        failed_query = failed_query.eq('business_id', business_id)
+        if business_id:
+            failed_query = failed_query.eq('business_id', business_id)
 
-    failed_items = failed_query.execute()
+        failed_items = failed_query.execute()
 
-    return {
-        'counts': counts,
-        'total': sum(counts.values()),
-        'recent_failures': failed_items.data,
-    }
+        items_query = supabase.table('message_queue').select(
+            'id, customer_id, business_id, message_type, stage, sequence_day, error_log, retry_count, max_retries, scheduled_at, created_at, updated_at'
+        ).order('created_at', desc=True).limit(200)
+
+        if business_id:
+            items_query = items_query.eq('business_id', business_id)
+
+        items_data = items_query.execute()
+        items = []
+        for item in items_data.data:
+            try:
+                customer_name = None
+                customer_phone = None
+                if item.get('customer_id'):
+                    c = supabase.table('customers').select('name, phone').eq('id', item['customer_id']).execute()
+                    if c.data:
+                        customer_name = c.data[0].get('name')
+                        customer_phone = c.data[0].get('phone')
+                business_name = None
+                if item.get('business_id'):
+                    b = supabase.table('business_profiles').select('business_name').eq('id', item['business_id']).execute()
+                    if b.data:
+                        business_name = b.data[0].get('business_name')
+                items.append({
+                    **item,
+                    'customer_name': customer_name,
+                    'customer_phone': customer_phone,
+                    'business_name': business_name,
+                })
+            except Exception as e:
+                logger.error(f"Error enriching queue item {item.get('id')}: {e}")
+                items.append({
+                    **item,
+                    'customer_name': None,
+                    'customer_phone': None,
+                    'business_name': None,
+                })
+
+        return {
+            'counts': counts,
+            'total': sum(counts.values()),
+            'recent_failures': failed_items.data,
+            'items': items,
+        }
+    except Exception as e:
+        logger.error(f"get_status failed: {e}")
+        return {
+            'counts': {s: 0 for s in STAGES},
+            'total': 0,
+            'recent_failures': [],
+            'items': [],
+        }
 
 
 def get_business_pipeline(business_id, limit=50):

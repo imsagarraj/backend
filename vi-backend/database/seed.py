@@ -1,3 +1,4 @@
+import os
 from database.supabase_client import get_supabase
 
 DEFAULT_AGENTS = [
@@ -102,6 +103,35 @@ def seed_agents():
             print("Run the migration SQL in Supabase SQL Editor first, or insert agents manually.")
             return
     print("Seeded 3 default AI agents: Zara, Arjun, Nisha")
+
+
+def seed_admin_users():
+    supabase = get_supabase()
+    admin_emails_env = os.getenv('ADMIN_EMAILS', '')
+    if not admin_emails_env:
+        print("ADMIN_EMAILS not set. Skipping admin seed.")
+        return
+
+    emails = [e.strip() for e in admin_emails_env.split(',') if e.strip()]
+    for email in emails:
+        existing = supabase.table('admin_users').select('*').eq('email', email).execute()
+        if existing.data:
+            print(f"Admin user {email} already exists. Skipping.")
+            continue
+
+        user_result = supabase.table('auth.users').select('id').eq('email', email).execute()
+        if not user_result.data:
+            print(f"Auth user {email} not found. Skipping.")
+            continue
+
+        user_id = user_result.data[0]['id']
+        supabase.table('admin_users').insert({
+            'user_id': user_id,
+            'email': email,
+            'role': 'super_admin',
+            'is_active': True,
+        }).execute()
+        print(f"Seeded admin user: {email} ({user_id})")
 
 
 def get_active_agent(business_id):

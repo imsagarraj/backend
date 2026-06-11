@@ -19,26 +19,51 @@ def list_businesses(admin: AuthUser = Depends(get_admin_user)):
 
     result = []
     for biz in businesses.data:
-        customer_count = supabase.table('customers').select('id', count='exact').eq(
-            'business_id', biz['id']
-        ).execute()
-        msg_count = supabase.table('messages').select('id', count='exact').eq(
-            'business_id', biz['id']
-        ).execute()
-        pipeline = get_status(biz['id'])
-        agent_info = None
-        if biz.get('active_agent_id'):
-            agent = supabase.table('agents').select('agent_name').eq('id', biz['active_agent_id']).execute()
-            if agent.data:
-                agent_info = agent.data[0]['agent_name']
-        result.append({
-            **biz,
-            'customer_count': customer_count.count if hasattr(customer_count, 'count') else 0,
-            'message_count': msg_count.count if hasattr(msg_count, 'count') else 0,
-            'pipeline': pipeline['counts'],
-            'agent_name': agent_info,
-        })
-    return result
+        try:
+            customers = supabase.table('customers').select('id').eq(
+                'business_id', biz['id']
+            ).execute()
+            messages = supabase.table('messages').select('id').eq(
+                'business_id', biz['id']
+            ).execute()
+            pipeline = get_status(biz['id'])
+            agent_info = None
+            if biz.get('active_agent_id'):
+                agent = supabase.table('agents').select('agent_name').eq('id', biz['active_agent_id']).execute()
+                if agent.data:
+                    agent_info = agent.data[0]['agent_name']
+            result.append({
+                **biz,
+                'customer_count': len(customers.data) if customers.data else 0,
+                'message_count': len(messages.data) if messages.data else 0,
+                'pipeline': pipeline['counts'],
+                'agent_name': agent_info,
+            })
+        except Exception:
+            result.append({
+                **biz,
+                'customer_count': 0,
+                'message_count': 0,
+                'pipeline': {},
+                'agent_name': None,
+            })
+
+    try:
+        all_customers = supabase.table('customers').select('id', count='exact').execute()
+        all_messages = supabase.table('messages').select('id', count='exact').execute()
+        total_customers = all_customers.count if hasattr(all_customers, 'count') else len(all_customers.data or [])
+        total_messages = all_messages.count if hasattr(all_messages, 'count') else len(all_messages.data or [])
+    except Exception:
+        total_customers = sum(b.get('customer_count', 0) for b in result)
+        total_messages = sum(b.get('message_count', 0) for b in result)
+
+    return {
+        'businesses': result,
+        'totals': {
+            'customers': total_customers,
+            'messages': total_messages,
+        },
+    }
 
 
 @router.get("/admin/businesses/{business_id}")

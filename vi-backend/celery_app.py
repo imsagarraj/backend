@@ -40,18 +40,6 @@ celery_app.conf.beat_schedule = {
         'task': 'tasks.message_tasks.process_smart_timing',
         'schedule': crontab(hour=6, minute=0),
     },
-    'weekend-messages': {
-        'task': 'tasks.message_tasks.enqueue_weekend_messages',
-        'schedule': crontab(hour=8, minute=0, day_of_week='fri'),
-    },
-    'festival-messages': {
-        'task': 'tasks.message_tasks.enqueue_festival_messages',
-        'schedule': crontab(hour=8, minute=0),
-    },
-    'read-receipt-analysis': {
-        'task': 'tasks.message_tasks.process_read_receipts',
-        'schedule': crontab(hour='*/4', minute=30),
-    },
 }
 
 import tasks.message_tasks

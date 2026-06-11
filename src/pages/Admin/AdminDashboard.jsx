@@ -6,6 +6,7 @@ import styles from '../../components/AdminLayout/AdminLayout.module.css'
 export default function AdminDashboard() {
   const navigate = useNavigate()
   const [businesses, setBusinesses] = useState([])
+  const [totals, setTotals] = useState({ customers: 0, messages: 0 })
   const [pipeline, setPipeline] = useState(null)
   const [loading, setLoading] = useState(true)
   const [retrying, setRetrying] = useState(false)
@@ -14,14 +15,17 @@ export default function AdminDashboard() {
 
   async function loadData() {
     try {
-      const [bizData, pipeData] = await Promise.all([
-        listBusinesses(),
-        getPipelineStatus(),
-      ])
-      setBusinesses(bizData)
+      const bizData = await listBusinesses()
+      setBusinesses(bizData.businesses || bizData)
+      setTotals(bizData.totals || { customers: 0, messages: 0 })
+    } catch (err) {
+      console.error('Failed to load businesses:', err)
+    }
+    try {
+      const pipeData = await getPipelineStatus()
       setPipeline(pipeData)
     } catch (err) {
-      console.error('Failed to load dashboard:', err)
+      console.error('Failed to load pipeline:', err)
     } finally {
       setLoading(false)
     }
@@ -39,8 +43,6 @@ export default function AdminDashboard() {
     }
   }
 
-  const totalCustomers = businesses.reduce((s, b) => s + (b.customer_count || 0), 0)
-  const totalMessages = businesses.reduce((s, b) => s + (b.message_count || 0), 0)
   const failedCount = pipeline?.counts?.failed || 0
 
   if (loading) return <p className={styles.emptyState}>Loading admin dashboard...</p>
@@ -68,11 +70,11 @@ export default function AdminDashboard() {
         </div>
         <div className={styles.statCard}>
           <div className={styles.statLabel}>Total Customers</div>
-          <div className={styles.statValue}>{totalCustomers}</div>
+          <div className={styles.statValue}>{totals.customers}</div>
         </div>
         <div className={styles.statCard}>
           <div className={styles.statLabel}>Messages Sent</div>
-          <div className={styles.statValue}>{totalMessages}</div>
+          <div className={styles.statValue}>{totals.messages}</div>
         </div>
         <div className={styles.statCard}>
           <div className={styles.statLabel}>Pipeline Failed</div>

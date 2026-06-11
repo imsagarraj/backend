@@ -3,9 +3,6 @@ from database.supabase_client import get_supabase
 from dependencies import get_admin_user, AuthUser
 from services.message_pipeline import get_status, retry_failed, get_business_pipeline
 from datetime import datetime, timezone
-import logging
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -20,7 +17,6 @@ def list_businesses(admin: AuthUser = Depends(get_admin_user)):
     supabase = get_supabase()
     businesses = supabase.table('business_profiles').select('*').order('created_at', desc=True).execute()
 
-    logger.info(f"list_businesses: found {len(businesses.data)} businesses")
     result = []
     for biz in businesses.data:
         try:
@@ -43,8 +39,7 @@ def list_businesses(admin: AuthUser = Depends(get_admin_user)):
                 'pipeline': pipeline['counts'],
                 'agent_name': agent_info,
             })
-        except Exception as e:
-            logger.error(f"Error processing business {biz.get('id')}: {e}")
+        except Exception:
             result.append({
                 **biz,
                 'customer_count': 0,
@@ -52,8 +47,23 @@ def list_businesses(admin: AuthUser = Depends(get_admin_user)):
                 'pipeline': {},
                 'agent_name': None,
             })
-    logger.info(f"list_businesses: returning {len(result)} businesses with counts")
-    return result
+
+    try:
+        all_customers = supabase.table('customers').select('id', count='exact').execute()
+        all_messages = supabase.table('messages').select('id', count='exact').execute()
+        total_customers = all_customers.count if hasattr(all_customers, 'count') else len(all_customers.data or [])
+        total_messages = all_messages.count if hasattr(all_messages, 'count') else len(all_messages.data or [])
+    except Exception:
+        total_customers = sum(b.get('customer_count', 0) for b in result)
+        total_messages = sum(b.get('message_count', 0) for b in result)
+
+    return {
+        'businesses': result,
+        'totals': {
+            'customers': total_customers,
+            'messages': total_messages,
+        },
+    }
 
 
 @router.get("/admin/businesses/{business_id}")

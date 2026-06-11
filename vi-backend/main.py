@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 import os
 
-from database.seed import seed_agents
+from database.seed import seed_agents, seed_admin_users
 from routers import customers, messages, agents, webhook, analytics, dashboard, admin, business_whatsapp
 
 env_path = Path(__file__).resolve().parent / '.env'
@@ -55,7 +55,11 @@ def on_startup():
     try:
         seed_agents()
     except Exception as e:
-        print(f"Seed warning (non-fatal): {e}")
+        print(f"Seed agents warning (non-fatal): {e}")
+    try:
+        seed_admin_users()
+    except Exception as e:
+        print(f"Seed admin users warning (non-fatal): {e}")
 
 
 @app.get("/")

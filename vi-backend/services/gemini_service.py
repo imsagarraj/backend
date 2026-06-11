@@ -14,10 +14,10 @@ client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
 GEMINI_MODEL = 'gemini-2.5-flash'
 
 SEQUENCE_INSTRUCTIONS = {
-    0: "Day 1 - Welcome & thank you. Celebrate their purchase, ask how they're finding it, invite them to share feedback anytime.",
-    1: "Day 3 - Experience check-in. Ask about their experience with the product/service. Was it up to expectations? Any feedback or suggestions?",
-    3: "Day 15 - Review & feedback. Ask for their honest review. What did they like? What could be improved? This helps the business serve better.",
-    15: "Day 30 - Value & loyalty. Thank them for being a customer. Ask if they need anything else. Request a testimonial or referral if appropriate."
+    0: "Day 1 - Purchase welcome. Warm, celebratory, genuine.",
+    1: "Day 3 - Check-in. Caring, curious, zero pressure.",
+    3: "Day 15 - Warm follow-up. Genuine care, no sales.",
+    15: "Day 30 - Soft upsell. Natural, friendly, no pressure."
 }
 
 BOOK_APPOINTMENT_FUNC = types.FunctionDeclaration(
@@ -52,22 +52,10 @@ def build_system_prompt(agent, business, customer):
     biz_type = (business.get('business_type') or '').lower()
 
     system_prompt += f"""
-\nCUSTOMER CONTEXT:
-- Name: {customer.get('name', 'Customer')}
-- Product/Service: {customer.get('product_purchased') or customer.get('product', '')}
-- Purchase Date: {customer.get('purchase_date', '')}
-- Personality: {customer.get('personality_profile', 'unknown')}
-- Previous responses: {(customer.get('response_count') or 0)}
-- Has appointment: {'Yes' if customer.get('next_booking') else 'No'}
-
-    CONVERSATION INSTRUCTIONS:
-- Match their communication style exactly
-- Be conversational: ask questions that invite replies
-- Show genuine interest in their experience with the business
-- Ask about what they liked and what could be improved (collect feedback naturally)
-- If they mention any problem or concern, address it with care
-- Build rapport naturally over multiple interactions
-- Collect reviews and feedback gently — make the customer feel heard
+\nCustomer personality detected: {customer.get('personality_profile', 'unknown')}
+Match their communication style exactly.
+Customer name: {customer.get('name', 'Customer')}
+Product they purchased: {customer.get('product_purchased') or customer.get('product', '')}
 """
 
     if 'dental' in biz_type or 'clinic' in biz_type or 'health' in biz_type:
@@ -108,31 +96,14 @@ def generate_followup_message(customer, business, agent, sequence_day):
 
     prompt = f"""
     Customer Name: {customer.get('name', 'Customer')}
-    Product/Service Purchased: {customer.get('product_purchased') or customer.get('product', '')}
+    Product Purchased: {customer.get('product_purchased') or customer.get('product', '')}
     Purchase Date: {customer.get('purchase_date', '')}
     Business Name: {business.get('business_name', '')}
-    Business Type: {business.get('business_type', '')}
     Customer Personality: {customer.get('personality_profile', 'unknown')}
-    Customer has replied before: {'Yes' if (customer.get('response_count') or 0) > 0 else 'No'}
-    Last contact: {customer.get('last_contact', 'None yet')}
     Sequence: {SEQUENCE_INSTRUCTIONS.get(sequence_day, '')}
 
-    CRITICAL INSTRUCTIONS:
-    - Write a natural WhatsApp message like a real person texting a customer
-    - Ask questions about their experience with the specific product/service they purchased
-    - Adapt your questions to the business type naturally:
-      * Cafe/restaurant: ask about food quality, service, ambiance, would they recommend
-      * Salon/spa: ask about their look/feel after the service, satisfaction
-      * Clinic/dental: ask how they're feeling, recovery, any concerns
-      * Retail/store: ask how the product is working, do they like it
-      * Gym/fitness: ask about their progress, how they're finding the routine
-      * Any other type: ask relevant experience questions naturally
-    - Collect feedback: ask what they liked and what could be improved
-    - The goal is genuine conversation and useful feedback for the business
-    - End with a question that invites them to reply
-    - Keep it under 80 words
-    - Match your agent personality perfectly
-    - Only output the message text. Nothing else.
+    Generate the WhatsApp message now.
+    Only output the message text. Nothing else.
     No quotes, no labels, no explanation.
     """
 
@@ -206,35 +177,24 @@ def generate_appointment_message(customer, business, agent, message_type):
 Customer Name: {customer.get('name', 'Customer')}
 Appointment: {customer.get('next_booking', 'No appointment set')}
 Business: {business.get('business_name', '')}
-Business Type: {business.get('business_type', '')}
 
 Today's date: {today}
 
 You are reminding the customer about their upcoming appointment.
-- Be warm and caring
-- Confirm the appointment time
-- Ask if they have any concerns or questions before the visit
-- Offer to reschedule if needed
-- End with a friendly, reassuring note
+Be warm and helpful. Confirm the appointment time and ask if they need to reschedule.
 Only output the message text. Nothing else. No quotes.
 """
     elif message_type == 'followup':
         prompt = f"""
 Customer Name: {customer.get('name', 'Customer')}
 Business: {business.get('business_name', '')}
-Business Type: {business.get('business_type', '')}
 Last appointment: {customer.get('next_booking', 'No appointment set')}
 Product purchased: {customer.get('product_purchased') or customer.get('product', '')}
 
 Today's date: {today}
 
-This customer had an appointment yesterday/earlier. Follow up with them:
-- Ask how they're feeling since the visit
-- Ask about their experience — was everything satisfactory?
-- If it was for treatment, ask how they're recovering
-- If they mentioned any issues, check up on those specifically
-- Offer further help if needed
-- Be caring and genuine, not salesy
+This customer had an appointment yesterday. Follow up with them — ask how it went,
+if they're feeling better, and if they need anything more. Be caring, not salesy.
 Only output the message text. Nothing else. No quotes.
 """
 
@@ -248,81 +208,6 @@ Only output the message text. Nothing else. No quotes.
         model=GEMINI_MODEL,
         contents=prompt,
         config=config
-    )
-    return response.text.strip()
-
-
-def generate_weekend_message(customer, business, agent):
-    system_prompt = build_system_prompt(agent, business, customer)
-    today = datetime.now(timezone.utc).date().isoformat()
-
-    prompt = f"""
-Customer Name: {customer.get('name', 'Customer')}
-Business Name: {business.get('business_name', '')}
-Business Type: {business.get('business_type', '')}
-Product/Service: {customer.get('product_purchased') or customer.get('product', '')}
-Today's date: {today}
-
-CRITICAL INSTRUCTIONS:
-- Weekend is approaching! Send a friendly message about weekend plans
-- If cafe/restaurant: ask if they'd like to visit this weekend, mention any specials
-- If salon/spa: ask if they want to book a weekend appointment, relax and unwind
-- If entertainment/movie: ask if they're planning to catch a show or movie
-- If hotel: ask if they're planning a weekend getaway
-- Make it conversational and exciting, not pushy
-- Ask an open-ended question about their weekend plans
-- Let them know the business would love to host them
-- Keep under 80 words
-- Match your agent personality perfectly
-Only output the message text. Nothing else. No quotes.
-"""
-
-    config = types.GenerateContentConfig(
-        system_instruction=system_prompt,
-        max_output_tokens=200,
-        temperature=0.8
-    )
-    response = client.models.generate_content(
-        model=GEMINI_MODEL, contents=prompt, config=config
-    )
-    return response.text.strip()
-
-
-def generate_festival_message(customer, business, agent, festival_name):
-    system_prompt = build_system_prompt(agent, business, customer)
-    today = datetime.now(timezone.utc).date().isoformat()
-
-    prompt = f"""
-Customer Name: {customer.get('name', 'Customer')}
-Business Name: {business.get('business_name', '')}
-Business Type: {business.get('business_type', '')}
-Product/Service: {customer.get('product_purchased') or customer.get('product', '')}
-Upcoming Festival: {festival_name}
-Today's date: {today}
-
-CRITICAL INSTRUCTIONS:
-- Send a warm festive greeting for {festival_name}
-- Wish them well for the festival
-- If relevant to the business, suggest how they can celebrate or avail services
-  * Salon/spa: suggest a festive makeover or grooming package
-  * Restaurant/cafe: invite them for a festive meal with family
-  * Store: suggest festive shopping or gift ideas
-  * Event: ask if they need help planning celebrations
-  * Gym/fitness: suggest staying healthy during festivities
-- Make it warm and personal, not salesy
-- Reference the festival naturally
-- Keep under 80 words
-- Match your agent personality perfectly
-Only output the message text. Nothing else. No quotes.
-"""
-
-    config = types.GenerateContentConfig(
-        system_instruction=system_prompt,
-        max_output_tokens=200,
-        temperature=0.8
-    )
-    response = client.models.generate_content(
-        model=GEMINI_MODEL, contents=prompt, config=config
     )
     return response.text.strip()
 

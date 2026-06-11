@@ -1,31 +1,19 @@
 #!/bin/bash
-cd "$(dirname "$0")"
-source venv/bin/activate
+set -e
 
-# Kill old processes
-kill $(lsof -ti:8000) 2>/dev/null
+# Always start uvicorn
+uvicorn main:app --host 0.0.0.0 --port $PORT &
+WEB_PID=$!
 
-# Start server
-uvicorn main:app --host 0.0.0.0 --port 8000 &
-sleep 3
+# Start celery only if REDIS_URL is configured
+if [ -n "$REDIS_URL" ]; then
+    celery -A celery_app worker --loglevel=info --concurrency=1 --max-tasks-per-child=10 &
+    CELERY_PID=$!
+    celery -A celery_app beat --loglevel=info --pidfile=/tmp/celerybeat.pid &
+    BEAT_PID=$!
+else
+    echo "REDIS_URL not set — skipping Celery worker/beat"
+fi
 
-# Start tunnel
-npx localtunnel --port 8000 &
-sleep 5
-
-# Get URL
-URL=$(cat /proc/*/fd/1 2>/dev/null | grep -oP 'https://[a-z-]+\.loca\.lt' | head -1)
-[ -z "$URL" ] && URL="check output above"
-
-echo ""
-echo "==================== READY ===================="
-echo "Server: http://localhost:8000"
-echo "Webhook URL: $URL/api/v1/webhook/whatsapp"
-
-echo ""
-echo "Paste this in Meta Developer Console -> Webhook -> Callback URL:"
-echo "$URL/api/v1/webhook/whatsapp"
-echo "================================================"
-echo ""
-echo "Server running. Press Ctrl+C to stop."
+trap "kill $WEB_PID $CELERY_PID $BEAT_PID 2>/dev/null" EXIT
 wait
