@@ -1,6 +1,5 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -49,10 +48,6 @@ app.include_router(analytics.router, prefix=API_PREFIX, tags=["analytics"])
 app.include_router(dashboard.router, prefix=API_PREFIX, tags=["dashboard"])
 app.include_router(admin.router, prefix=API_PREFIX, tags=["admin"])
 app.include_router(business_whatsapp.router, prefix=API_PREFIX, tags=["business_whatsapp"])
-
-ADMIN_DIST = Path(__file__).resolve().parent / 'vicloud-admin' / 'admin-dist'
-if ADMIN_DIST.exists():
-    app.mount('/admin', StaticFiles(directory=str(ADMIN_DIST), html=True), name='admin')
 
 
 @app.on_event("startup")
