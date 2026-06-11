@@ -57,11 +57,22 @@ def list_businesses(admin: AuthUser = Depends(get_admin_user)):
         total_customers = sum(b.get('customer_count', 0) for b in result)
         total_messages = sum(b.get('message_count', 0) for b in result)
 
+    try:
+        biz_ids_in_customers = list(set(c['business_id'] for c in (supabase.table('customers').select('business_id').execute()).data if c.get('business_id')))
+        biz_ids_in_profiles = [b['id'] for b in businesses.data]
+    except Exception:
+        biz_ids_in_customers = []
+        biz_ids_in_profiles = []
+
     return {
         'businesses': result,
         'totals': {
             'customers': total_customers,
             'messages': total_messages,
+        },
+        '_debug': {
+            'business_ids_in_customers': biz_ids_in_customers,
+            'business_ids_in_profiles': biz_ids_in_profiles,
         },
     }
 
