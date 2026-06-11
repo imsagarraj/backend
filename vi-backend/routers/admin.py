@@ -17,52 +17,41 @@ def list_businesses(admin: AuthUser = Depends(get_admin_user)):
     supabase = get_supabase()
     businesses = supabase.table('business_profiles').select('*').order('created_at', desc=True).execute()
 
+    all_customers = supabase.table('customers').select('business_id').execute()
+    all_messages = supabase.table('messages').select('business_id').execute()
+
+    customer_counts = {}
+    for c in (all_customers.data or []):
+        bid = c.get('business_id')
+        if bid is not None:
+            customer_counts[bid] = customer_counts.get(bid, 0) + 1
+
+    message_counts = {}
+    for m in (all_messages.data or []):
+        bid = m.get('business_id')
+        if bid is not None:
+            message_counts[bid] = message_counts.get(bid, 0) + 1
+
     result = []
-    for biz in businesses.data:
-        try:
-            customers = supabase.table('customers').select('id').eq(
-                'business_id', biz['id']
-            ).execute()
-            messages = supabase.table('messages').select('id').eq(
-                'business_id', biz['id']
-            ).execute()
-            pipeline = get_status(biz['id'])
-            agent_info = None
-            if biz.get('active_agent_id'):
-                agent = supabase.table('agents').select('agent_name').eq('id', biz['active_agent_id']).execute()
-                if agent.data:
-                    agent_info = agent.data[0]['agent_name']
-            result.append({
-                **biz,
-                'customer_count': len(customers.data) if customers.data else 0,
-                'message_count': len(messages.data) if messages.data else 0,
-                'pipeline': pipeline['counts'],
-                'agent_name': agent_info,
-            })
-        except Exception:
-            result.append({
-                **biz,
-                'customer_count': 0,
-                'message_count': 0,
-                'pipeline': {},
-                'agent_name': None,
-            })
+    for biz in (businesses.data or []):
+        agent_info = None
+        if biz.get('active_agent_id'):
+            agent = supabase.table('agents').select('agent_name').eq('id', biz['active_agent_id']).execute()
+            if agent.data:
+                agent_info = agent.data[0]['agent_name']
+        pipeline = get_status(biz['id'])
+        result.append({
+            **biz,
+            'customer_count': customer_counts.get(biz['id'], 0),
+            'message_count': message_counts.get(biz['id'], 0),
+            'pipeline': pipeline['counts'],
+            'agent_name': agent_info,
+        })
 
-    try:
-        all_customers = supabase.table('customers').select('id', count='exact').execute()
-        all_messages = supabase.table('messages').select('id', count='exact').execute()
-        total_customers = all_customers.count if hasattr(all_customers, 'count') else len(all_customers.data or [])
-        total_messages = all_messages.count if hasattr(all_messages, 'count') else len(all_messages.data or [])
-    except Exception:
-        total_customers = sum(b.get('customer_count', 0) for b in result)
-        total_messages = sum(b.get('message_count', 0) for b in result)
+    total_customers = len(all_customers.data or [])
+    total_messages = len(all_messages.data or [])
 
-    try:
-        biz_ids_in_customers = list(set(c['business_id'] for c in (supabase.table('customers').select('business_id').execute()).data if c.get('business_id')))
-        biz_ids_in_profiles = [b['id'] for b in businesses.data]
-    except Exception:
-        biz_ids_in_customers = []
-        biz_ids_in_profiles = []
+    unmatched = [bid for bid in customer_counts if bid not in {b['id'] for b in (businesses.data or [])}]
 
     return {
         'businesses': result,
@@ -71,8 +60,9 @@ def list_businesses(admin: AuthUser = Depends(get_admin_user)):
             'messages': total_messages,
         },
         '_debug': {
-            'business_ids_in_customers': biz_ids_in_customers,
-            'business_ids_in_profiles': biz_ids_in_profiles,
+            'customer_counts_by_biz': customer_counts,
+            'message_counts_by_biz': message_counts,
+            'unmatched_business_ids_in_customers': unmatched,
         },
     }
 
