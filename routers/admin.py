@@ -19,10 +19,10 @@ def list_businesses(admin: AuthUser = Depends(get_admin_user)):
 
     result = []
     for biz in businesses.data:
-        customer_count = supabase.table('customers').select('id', count='exact').eq(
+        customers = supabase.table('customers').select('id').eq(
             'business_id', biz['id']
         ).execute()
-        msg_count = supabase.table('messages').select('id', count='exact').eq(
+        messages = supabase.table('messages').select('id').eq(
             'business_id', biz['id']
         ).execute()
         pipeline = get_status(biz['id'])
@@ -33,8 +33,8 @@ def list_businesses(admin: AuthUser = Depends(get_admin_user)):
                 agent_info = agent.data[0]['agent_name']
         result.append({
             **biz,
-            'customer_count': customer_count.count if hasattr(customer_count, 'count') else 0,
-            'message_count': msg_count.count if hasattr(msg_count, 'count') else 0,
+            'customer_count': len(customers.data),
+            'message_count': len(messages.data),
             'pipeline': pipeline['counts'],
             'agent_name': agent_info,
         })
