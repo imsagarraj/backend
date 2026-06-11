@@ -82,6 +82,19 @@ def debug_db():
     queue = supabase.table('message_queue').select('id', count='exact').execute()
     agents = supabase.table('agents').select('id', count='exact').execute()
     admins = supabase.table('admin_users').select('id', count='exact').execute()
+    
+    biz2 = supabase.table('business_profiles').select('*').execute()
+    biz_counts = []
+    for b in biz2.data:
+        c = supabase.table('customers').select('id').eq('business_id', b['id']).execute()
+        m = supabase.table('messages').select('id').eq('business_id', b['id']).execute()
+        biz_counts.append({
+            'business_id': b['id'],
+            'business_name': b.get('business_name'),
+            'customers': len(c.data),
+            'messages': len(m.data),
+        })
+    
     return {
         "business_profiles": len(biz.data),
         "customers": len(cust.data),
@@ -89,4 +102,5 @@ def debug_db():
         "message_queue": len(queue.data),
         "agents": len(agents.data),
         "admin_users": len(admins.data),
+        "business_counts": biz_counts,
     }
