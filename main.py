@@ -70,3 +70,23 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "healthy"}
+
+
+@app.get("/debug/db")
+def debug_db():
+    from database.supabase_client import get_supabase
+    supabase = get_supabase()
+    biz = supabase.table('business_profiles').select('id', count='exact').execute()
+    cust = supabase.table('customers').select('id', count='exact').execute()
+    msgs = supabase.table('messages').select('id', count='exact').execute()
+    queue = supabase.table('message_queue').select('id', count='exact').execute()
+    agents = supabase.table('agents').select('id', count='exact').execute()
+    admins = supabase.table('admin_users').select('id', count='exact').execute()
+    return {
+        "business_profiles": len(biz.data),
+        "customers": len(cust.data),
+        "messages": len(msgs.data),
+        "message_queue": len(queue.data),
+        "agents": len(agents.data),
+        "admin_users": len(admins.data),
+    }

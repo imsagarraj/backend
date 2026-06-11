@@ -3,6 +3,9 @@ from database.supabase_client import get_supabase
 from dependencies import get_admin_user, AuthUser
 from services.message_pipeline import get_status, retry_failed, get_business_pipeline
 from datetime import datetime, timezone
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -17,27 +20,39 @@ def list_businesses(admin: AuthUser = Depends(get_admin_user)):
     supabase = get_supabase()
     businesses = supabase.table('business_profiles').select('*').order('created_at', desc=True).execute()
 
+    logger.info(f"list_businesses: found {len(businesses.data)} businesses")
     result = []
     for biz in businesses.data:
-        customers = supabase.table('customers').select('id').eq(
-            'business_id', biz['id']
-        ).execute()
-        messages = supabase.table('messages').select('id').eq(
-            'business_id', biz['id']
-        ).execute()
-        pipeline = get_status(biz['id'])
-        agent_info = None
-        if biz.get('active_agent_id'):
-            agent = supabase.table('agents').select('agent_name').eq('id', biz['active_agent_id']).execute()
-            if agent.data:
-                agent_info = agent.data[0]['agent_name']
-        result.append({
-            **biz,
-            'customer_count': len(customers.data),
-            'message_count': len(messages.data),
-            'pipeline': pipeline['counts'],
-            'agent_name': agent_info,
-        })
+        try:
+            customers = supabase.table('customers').select('id').eq(
+                'business_id', biz['id']
+            ).execute()
+            messages = supabase.table('messages').select('id').eq(
+                'business_id', biz['id']
+            ).execute()
+            pipeline = get_status(biz['id'])
+            agent_info = None
+            if biz.get('active_agent_id'):
+                agent = supabase.table('agents').select('agent_name').eq('id', biz['active_agent_id']).execute()
+                if agent.data:
+                    agent_info = agent.data[0]['agent_name']
+            result.append({
+                **biz,
+                'customer_count': len(customers.data) if customers.data else 0,
+                'message_count': len(messages.data) if messages.data else 0,
+                'pipeline': pipeline['counts'],
+                'agent_name': agent_info,
+            })
+        except Exception as e:
+            logger.error(f"Error processing business {biz.get('id')}: {e}")
+            result.append({
+                **biz,
+                'customer_count': 0,
+                'message_count': 0,
+                'pipeline': {},
+                'agent_name': None,
+            })
+    logger.info(f"list_businesses: returning {len(result)} businesses with counts")
     return result
 
 
