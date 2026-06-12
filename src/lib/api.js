@@ -82,3 +82,14 @@ export function getCustomerDetail(id) {
 export function syncWhatsappNumber(businessId) {
   return request(`/businesses/${businessId}/whatsapp/sync`, { method: 'POST' })
 }
+
+export function fetchBusinessProfile() {
+  return request('/business-profile')
+}
+
+export function updateBusinessProfile(data) {
+  return request('/business-profile', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}

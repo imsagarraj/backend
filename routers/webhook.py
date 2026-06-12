@@ -44,32 +44,58 @@ async def receive_webhook(request: Request):
             changes = entry.get('changes', [])
             for change in changes:
                 value = change.get('value', {})
+                metadata = value.get('metadata', {})
+                pn_id = metadata.get('phone_number_id', '')
                 messages = value.get('messages', [])
                 for msg in messages:
                     if msg.get('type') == 'text':
                         phone = msg.get('from', '')
                         message_text = msg.get('text', {}).get('body', '')
                         message_id = msg.get('id', '')
-                        await handle_incoming_message(phone, message_text, message_id)
+                        await handle_incoming_message(phone, message_text, message_id, pn_id)
     except Exception as e:
         logger.error(f"Error processing webhook: {e}")
 
     return {"status": "ok"}
 
 
-async def handle_incoming_message(phone, message_text, message_id):
+async def handle_incoming_message(phone, message_text, message_id, pn_id=''):
     supabase = get_supabase()
     try:
-        customers = supabase.table('customers').select('*').eq('phone', phone).execute()
+        business = None
+        if pn_id:
+            biz_result = supabase.table('business_profiles').select('*').eq('meta_phone_number_id', pn_id).execute()
+            if biz_result.data:
+                business = biz_result.data[0]
+
+        if not business:
+            customers = supabase.table('customers').select('*').eq('phone', phone).execute()
+            if not customers.data:
+                logger.warning(f"Customer not found for phone: {phone}")
+                return
+            customer = customers.data[0]
+            biz_id = customer.get('business_id')
+            if biz_id:
+                biz_result = supabase.table('business_profiles').select('*').eq('id', biz_id).execute()
+                if biz_result.data:
+                    business = biz_result.data[0]
+
+        if not business:
+            logger.warning(f"No business found for phone_number_id={pn_id} or customer phone={phone}")
+            return
+
+        biz_id = business['id']
+
+        customers = supabase.table('customers').select('*').eq('phone', phone).eq('business_id', biz_id).execute()
         if not customers.data:
-            logger.warning(f"Customer not found for phone: {phone}")
+            logger.warning(f"Customer with phone {phone} not found in business {biz_id}")
             return
 
         customer = customers.data[0]
 
         supabase.table('messages').insert({
             'customer_id': customer['id'],
-            'business_id': customer.get('business_id'),
+            'business_id': biz_id,
             'direction': 'received',
             'content': message_text,
             'status': 'received',
@@ -93,17 +119,6 @@ async def handle_incoming_message(phone, message_text, message_id):
         history = supabase.table('conversation_history').select('*').eq(
             'customer_id', customer['id']
         ).order('timestamp').execute()
-
-        biz_id = customer.get('business_id')
-        if not biz_id:
-            logger.error(f"No business_id for customer {customer['id']}")
-            return
-
-        biz = supabase.table('business_profiles').select('*').eq('id', biz_id).execute()
-        if not biz.data:
-            logger.error(f"Business not found for id {biz_id}")
-            return
-        business = biz.data[0]
 
         agent = get_active_agent(biz_id)
         if not agent:

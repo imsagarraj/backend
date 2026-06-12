@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useApp } from '../../context/AppContext'
-import { syncWhatsappNumber } from '../../lib/api'
 import styles from './BusinessProfile.module.css'
 
 const indianStates = [
@@ -42,9 +41,6 @@ export default function BusinessProfile() {
   const [form, setForm] = useState(defaultForm)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [syncing, setSyncing] = useState(false)
-  const [syncStatus, setSyncStatus] = useState('')
-  const [syncError, setSyncError] = useState('')
 
   useEffect(() => {
     if (business) {
@@ -147,48 +143,15 @@ export default function BusinessProfile() {
           <div className={styles.field}>
             <label className={styles.label}>WhatsApp Business Number</label>
             <input className={styles.input} value={form.whatsapp} onChange={set('whatsapp')} placeholder="919XXXXXXXXX" />
-          </div>
-          <div className={styles.field}>
-            <label className={styles.label}>WhatsApp Registration</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <button
-                className={styles.syncBtn}
-                onClick={async () => {
-                  if (!business?.id) return
-                  setSyncing(true)
-                  setSyncError('')
-                  try {
-                    const res = await syncWhatsappNumber(business.id)
-                    setSyncStatus(res.status)
-                    if (res.status === 'synced') {
-                      setForm(f => ({ ...f, whatsapp_verified: true, meta_phone_number_id: res.phone_number_id }))
-                    }
-                  } catch (err) {
-                    setSyncError(err.message)
-                  } finally {
-                    setSyncing(false)
-                  }
-                }}
-                disabled={syncing || !form.whatsapp}
-              >
-                {syncing ? 'Syncing...' : 'Sync with WhatsApp'}
-              </button>
-              {form.whatsapp_verified ? (
-                <span style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 600 }}>
-                  ✅ Verified
-                </span>
-              ) : form.whatsapp ? (
-                <span style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600 }}>
-                  ⏳ Not synced
-                </span>
-              ) : null}
-            </div>
-            {syncError && (
-              <div style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: 4 }}>{syncError}</div>
-            )}
-            <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)', marginTop: 4 }}>
-              Add this number in your Meta Business Manager → WABA → Phone Numbers first, then click Sync.
-            </div>
+            {business?.whatsapp_verified ? (
+              <span style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 600, marginTop: 4, display: 'inline-block' }}>
+                ✅ Verified & auto-synced
+              </span>
+            ) : form.whatsapp ? (
+              <span style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600, marginTop: 4, display: 'inline-block' }}>
+                ⏳ Will sync on save
+              </span>
+            ) : null}
           </div>
           <div className={styles.field}>
             <label className={styles.label}>GST Number <span className={styles.optional}>(optional)</span></label>

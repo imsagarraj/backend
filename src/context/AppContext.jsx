@@ -3,9 +3,8 @@ import { useAuth } from './AuthContext'
 import {
   fetchCustomers, addCustomer as dbAdd,
   updateCustomer as dbUpdate, deleteCustomer as dbDelete,
-  fetchBusinessProfile, upsertBusinessProfile as dbUpsertBusiness,
 } from '../lib/db'
-import { getDashboard, listAgents } from '../lib/api'
+import { getDashboard, listAgents, fetchBusinessProfile, updateBusinessProfile } from '../lib/api'
 
 const AppContext = createContext(null)
 
@@ -82,9 +81,9 @@ export function AppProvider({ children }) {
   }, [])
 
   const saveBusiness = useCallback(async (profileData) => {
-    const saved = await dbUpsertBusiness({ ...profileData, user_id: authUser.id })
-    setBusiness(saved)
-    return saved
+    const result = await updateBusinessProfile({ ...profileData, user_id: authUser.id })
+    setBusiness(result.business)
+    return result.business
   }, [authUser])
 
   const refreshDashboard = useCallback(async () => {
