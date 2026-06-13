@@ -16,15 +16,6 @@ class ForceCORSMiddleware:
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send):
         if scope["type"] == "http":
-            if scope["method"] == "OPTIONS":
-                await send({
-                    "type": "http.response.start",
-                    "status": 200,
-                    "headers": CORS_HEADERS,
-                })
-                await send({"type": "http.response.body", "body": b""})
-                return
-
             async def send_with_cors(message):
                 if message["type"] == "http.response.start":
                     headers = list(message.get("headers", []))
