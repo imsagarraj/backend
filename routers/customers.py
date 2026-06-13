@@ -1,11 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from database.supabase_client import get_supabase
 from dependencies import get_current_user, get_user_business_id, AuthUser
+from database.seed import get_active_agent
+from services.whatsapp_service import send_text_message
+from services.gemini_service import generate_followup_message
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
-from datetime import date
+from datetime import date, datetime, timezone
 import csv
 import io
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -44,8 +50,43 @@ def create_customer(data: CustomerCreate, user: AuthUser = Depends(get_current_u
     payload = data.model_dump()
     payload['user_id'] = user.id
     payload['business_id'] = biz_id
-    result = supabase.table('customers').insert(payload).execute()
-    return result.data[0]
+    result = supabase.table('customers').insert(payload).select().execute()
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to create customer")
+
+    customer = result.data[0]
+
+    try:
+        biz = supabase.table('business_profiles').select('*').eq('id', biz_id).execute()
+        if biz.data:
+            business = biz.data[0]
+            agent = get_active_agent(biz_id)
+            if agent and business.get('meta_phone_number_id'):
+                welcome_text = generate_followup_message(customer, business, agent, 0)
+                if welcome_text:
+                    send_result = send_text_message(customer['phone'], welcome_text, phone_number_id=business['meta_phone_number_id'])
+                    supabase.table('messages').insert({
+                        'customer_id': customer['id'],
+                        'business_id': biz_id,
+                        'direction': 'sent',
+                        'content': welcome_text,
+                        'status': 'sent',
+                        'meta_message_id': send_result.get('message_id'),
+                        'sequence_day': 0,
+                    }).execute()
+                    supabase.table('conversation_history').insert({
+                        'customer_id': customer['id'],
+                        'role': 'model',
+                        'content': welcome_text,
+                    }).execute()
+                    supabase.table('customers').update({
+                        'current_sequence_day': 0,
+                        'last_contact': datetime.now(timezone.utc).isoformat(),
+                    }).eq('id', customer['id']).execute()
+    except Exception as e:
+        logger.error(f"Failed to send welcome message to customer {customer['id']}: {e}")
+
+    return customer
 
 
 @router.get("/customers")
