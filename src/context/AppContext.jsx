@@ -1,10 +1,10 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { useAuth } from './AuthContext'
 import {
-  fetchCustomers, addCustomer as dbAdd,
+  fetchCustomers,
   updateCustomer as dbUpdate, deleteCustomer as dbDelete,
 } from '../lib/db'
-import { getDashboard, listAgents, fetchBusinessProfile, updateBusinessProfile } from '../lib/api'
+import { getDashboard, listAgents, fetchBusinessProfile, updateBusinessProfile, createCustomer } from '../lib/api'
 
 const AppContext = createContext(null)
 
@@ -64,10 +64,10 @@ export function AppProvider({ children }) {
   }, [business?.id])
 
   const addCustomer = useCallback(async (customerData) => {
-    const newCustomer = await dbAdd({ ...customerData, user_id: authUser.id, business_id: business?.id })
+    const newCustomer = await createCustomer(customerData)
     setCustomers(prev => [newCustomer, ...prev])
     return newCustomer
-  }, [authUser, business])
+  }, [])
 
   const updateCustomer = useCallback(async (id, updates) => {
     const updated = await dbUpdate(id, updates)
