@@ -69,12 +69,12 @@ export function AppProvider({ children }) {
     try {
       const result = await sendWelcome(newCustomer.id)
       if (result.status === 'sent') {
-        console.log('✅ Welcome message sent')
+        setNotifications(prev => [{ type: 'success', text: `Welcome message sent to ${newCustomer.name}`, unread: true, time: new Date().toISOString() }, ...prev])
       } else {
-        console.warn('⚠️ Welcome message not sent:', result.reason || result.status)
+        setNotifications(prev => [{ type: 'warning', text: `Welcome not sent to ${newCustomer.name}: ${result.reason || result.status}`, unread: true, time: new Date().toISOString() }, ...prev])
       }
     } catch (e) {
-      console.warn('⚠️ Welcome message error:', e.message)
+      setNotifications(prev => [{ type: 'error', text: `Welcome message error for ${newCustomer.name}: ${e.message}`, unread: true, time: new Date().toISOString() }, ...prev])
     }
     return newCustomer
   }, [authUser, business])
