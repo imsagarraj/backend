@@ -1,10 +1,10 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { useAuth } from './AuthContext'
 import {
-  fetchCustomers, addCustomer as dbAdd,
+  fetchCustomers,
   updateCustomer as dbUpdate, deleteCustomer as dbDelete,
 } from '../lib/db'
-import { getDashboard, listAgents, fetchBusinessProfile, updateBusinessProfile, sendWelcome } from '../lib/api'
+import { getDashboard, listAgents, fetchBusinessProfile, updateBusinessProfile, createCustomer } from '../lib/api'
 
 const AppContext = createContext(null)
 
@@ -64,20 +64,10 @@ export function AppProvider({ children }) {
   }, [business?.id])
 
   const addCustomer = useCallback(async (customerData) => {
-    const newCustomer = await dbAdd({ ...customerData, user_id: authUser.id, business_id: business?.id })
+    const newCustomer = await createCustomer(customerData)
     setCustomers(prev => [newCustomer, ...prev])
-    try {
-      const result = await sendWelcome(newCustomer.id)
-      if (result.status === 'sent') {
-        setNotifications(prev => [{ type: 'success', text: `Welcome message sent to ${newCustomer.name}`, unread: true, time: new Date().toISOString() }, ...prev])
-      } else {
-        setNotifications(prev => [{ type: 'warning', text: `Welcome not sent to ${newCustomer.name}: ${result.reason || result.status}`, unread: true, time: new Date().toISOString() }, ...prev])
-      }
-    } catch (e) {
-      setNotifications(prev => [{ type: 'error', text: `Welcome message error for ${newCustomer.name}: ${e.message}`, unread: true, time: new Date().toISOString() }, ...prev])
-    }
     return newCustomer
-  }, [authUser, business])
+  }, [])
 
   const updateCustomer = useCallback(async (id, updates) => {
     const updated = await dbUpdate(id, updates)
