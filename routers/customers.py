@@ -123,16 +123,6 @@ def create_customer(data: CustomerCreate, background_tasks: BackgroundTasks, use
     return customer
 
 
-@router.post("/customers/{customer_id}/send-welcome")
-def trigger_welcome(customer_id: int, user: AuthUser = Depends(get_current_user), biz_id: int = Depends(get_user_business_id)):
-    supabase = get_supabase()
-    customer = supabase.table('customers').select('*').eq('id', customer_id).eq('business_id', biz_id).execute()
-    if not customer.data:
-        raise HTTPException(status_code=404, detail="Customer not found")
-    result = send_welcome_message(customer.data[0], biz_id)
-    return result
-
-
 @router.get("/customers")
 def list_customers(user: AuthUser = Depends(get_current_user), page: int = 1, limit: int = 50):
     supabase = get_supabase()

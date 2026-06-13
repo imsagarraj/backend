@@ -53,34 +53,11 @@ export function sendMessage(customerId, messageText) {
   })
 }
 
-export function listCustomers() {
-  return request('/customers')
-}
-
 export function createCustomer(data) {
   return request('/customers', {
     method: 'POST',
     body: JSON.stringify(data),
   })
-}
-
-export function updateCustomer(id, data) {
-  return request(`/customers/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  })
-}
-
-export function deleteCustomer(id) {
-  return request(`/customers/${id}`, { method: 'DELETE' })
-}
-
-export function getCustomerDetail(id) {
-  return request(`/customers/${id}`)
-}
-
-export function syncWhatsappNumber(businessId) {
-  return request(`/businesses/${businessId}/whatsapp/sync`, { method: 'POST' })
 }
 
 export function fetchBusinessProfile() {
@@ -92,8 +69,4 @@ export function updateBusinessProfile(data) {
     method: 'PUT',
     body: JSON.stringify(data),
   })
-}
-
-export function sendWelcome(customerId) {
-  return request(`/customers/${customerId}/send-welcome`, { method: 'POST' })
 }
