@@ -22,10 +22,14 @@ def _get_api_url(phone_number_id=None):
     return f'https://graph.facebook.com/v22.0/{pid}/messages'
 
 
-def send_text_message(phone, message, phone_number_id=None):
+def _clean_phone(phone):
     if phone.startswith('whatsapp:'):
         phone = phone.replace('whatsapp:', '')
-    to = phone.lstrip('+')
+    return phone.replace('+', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+
+
+def send_text_message(phone, message, phone_number_id=None):
+    to = _clean_phone(phone)
 
     payload = {
         'messaging_product': 'whatsapp',
@@ -45,9 +49,7 @@ def send_text_message(phone, message, phone_number_id=None):
 
 
 def send_template_message(phone, template_name, params, phone_number_id=None):
-    if phone.startswith('whatsapp:'):
-        phone = phone.replace('whatsapp:', '')
-    to = phone.lstrip('+')
+    to = _clean_phone(phone)
 
     components = [{
         'type': 'body',
