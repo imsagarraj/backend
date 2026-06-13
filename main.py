@@ -31,13 +31,6 @@ app.add_middleware(ForceCORSMiddleware)
 
 API_PREFIX = "/api/v1"
 
-
-@app.api_route("/{path:path}", methods=["OPTIONS"])
-async def preflight(path: str):
-    from fastapi.responses import PlainTextResponse
-    return PlainTextResponse(content="", status_code=200)
-
-
 app.include_router(webhook.router, prefix=API_PREFIX, tags=["webhook"])
 app.include_router(customers.router, prefix=API_PREFIX, tags=["customers"])
 app.include_router(messages.router, prefix=API_PREFIX, tags=["messages"])
