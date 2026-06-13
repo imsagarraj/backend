@@ -4,11 +4,14 @@ from dotenv import load_dotenv
 import os
 import emoji
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 env_path = Path(__file__).resolve().parent.parent / '.env'
 load_dotenv(env_path)
+
+logger = logging.getLogger(__name__)
 
 client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
 GEMINI_MODEL = 'gemini-2.5-flash'
@@ -63,6 +66,14 @@ Product they purchased: {customer.get('product_purchased') or customer.get('prod
         today = ist_now.date().isoformat()
         tomorrow_d = (ist_now.date() + timedelta(days=1)).isoformat()
         system_prompt += f"""
+CONVERSATION GOALS:
+- Actively ask the customer about their condition — how they're feeling, any pain, discomfort, or issues they're experiencing.
+- For dental: ask about tooth pain, sensitivity, swelling, bleeding gums, etc.
+- Respond with genuine care and concern for their health.
+- DO NOT just reply generically — probe for details about their symptoms.
+- After they share, acknowledge and suggest next steps (check-up, booking, etc.).
+- Keep the conversation focused on understanding their condition.
+
 APPOINTMENT BOOKING RULES:
 - If the customer mentions any pain, discomfort, or dental issue (e.g. tooth pain, sensitivity, swelling, bleeding gums, etc.), immediately express concern and suggest they visit the clinic for a check-up.
 - Ask if they'd like to book a follow-up appointment.
@@ -72,6 +83,15 @@ APPOINTMENT BOOKING RULES:
 
 BOOKING FUNCTION INSTRUCTIONS:
 You have a "book_appointment" function. You MUST call it when the customer agrees to book — do NOT just say you'll help. Call it with the actual date and time the customer specifies. If the customer says something like "tomorrow at 5pm", use "{tomorrow_d}T17:00:00+05:30". If the customer only says a day like "tomorrow" with no specific time, default to "{tomorrow_d}T10:00:00+05:30". Always use Indian Standard Time (IST, UTC+5:30) and ALWAYS append +05:30 to the time. Example: 2026-06-15T10:00:00+05:30.
+"""
+    else:
+        system_prompt += """
+CONVERSATION GOALS:
+- Actively ask the customer about their experience with the product/service they purchased.
+- Ask how they're finding it, if they have any feedback, or if they need any help.
+- Respond genuinely to what they share.
+- Probe for details about their experience and satisfaction.
+- Note any complaints, issues, or positive feedback they provide.
 """
 
     if customer.get('next_booking'):
@@ -238,3 +258,67 @@ def detect_personality(message_text):
         tags.append('humorous')
 
     return ','.join(tags) if tags else 'neutral'
+
+
+def extract_notes_from_conversation(customer, business, conversation_history):
+    if not conversation_history:
+        return None
+
+    history_text = "\n".join(
+        f"{'Customer' if m['role'] == 'user' else 'Agent'}: {m['content']}"
+        for m in conversation_history
+    )
+    biz_type = (business.get('business_type') or '').lower()
+
+    if 'dental' in biz_type or 'clinic' in biz_type or 'health' in biz_type:
+        prompt = f"""You are a medical note-taking assistant for a {business.get('business_type', 'healthcare')} business.
+
+Customer: {customer.get('name', 'Unknown')}
+Product/Service: {customer.get('product_purchased') or customer.get('product', '')}
+
+Read the conversation below and extract ONLY clinically relevant information:
+
+1. Symptoms reported (pain, discomfort, issues, etc.)
+2. Any description of the condition (duration, severity, location)
+3. Customer's concerns or questions about their health
+4. Any medications, treatments, or remedies mentioned
+5. Appointment booking details if any
+
+Full Conversation:
+{history_text}
+
+Return a concise clinical summary. If no health-relevant information was shared, return "No clinical information shared yet."
+Only output the summary text. Nothing else."""
+    else:
+        prompt = f"""You are a customer feedback analyst for {business.get('business_type', 'a business')}.
+
+Customer: {customer.get('name', 'Unknown')}
+Product/Service: {customer.get('product_purchased') or customer.get('product', '')}
+
+Read the conversation below and extract key information:
+
+1. Customer feedback about the product/service (positive, negative, or neutral)
+2. Any complaints or issues raised
+3. Any compliments or positive reactions
+4. Questions or concerns the customer has
+5. Any follow-up needs
+
+Full Conversation:
+{history_text}
+
+Return a concise summary. If no relevant feedback was shared, return "No feedback shared yet."
+Only output the summary text. Nothing else."""
+
+    try:
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                max_output_tokens=300,
+                temperature=0.3,
+            ),
+        )
+        return response.text.strip()
+    except Exception as e:
+        logger.error(f"Notes extraction failed: {e}")
+        return None
