@@ -46,20 +46,8 @@ class CustomerUpdate(BaseModel):
     next_booking: Optional[str] = None
 
 
-@router.post("/customers")
-def create_customer(data: CustomerCreate, user: AuthUser = Depends(get_current_user), biz_id: int = Depends(get_user_business_id)):
+def send_welcome_message(customer: dict, biz_id: int):
     supabase = get_supabase()
-    payload = data.model_dump()
-    payload['user_id'] = user.id
-    payload['business_id'] = biz_id
-    if not payload.get('purchase_date'):
-        payload['purchase_date'] = datetime.now(timezone.utc).date().isoformat()
-    result = supabase.table('customers').insert(payload).select().execute()
-    if not result.data:
-        raise HTTPException(status_code=500, detail="Failed to create customer")
-
-    customer = result.data[0]
-
     try:
         biz = supabase.table('business_profiles').select('*').eq('id', biz_id).execute()
         if biz.data:
@@ -90,7 +78,32 @@ def create_customer(data: CustomerCreate, user: AuthUser = Depends(get_current_u
     except Exception as e:
         logger.error(f"Failed to send welcome message to customer {customer['id']}: {e}")
 
+
+@router.post("/customers")
+def create_customer(data: CustomerCreate, user: AuthUser = Depends(get_current_user), biz_id: int = Depends(get_user_business_id)):
+    supabase = get_supabase()
+    payload = data.model_dump()
+    payload['user_id'] = user.id
+    payload['business_id'] = biz_id
+    if not payload.get('purchase_date'):
+        payload['purchase_date'] = datetime.now(timezone.utc).date().isoformat()
+    result = supabase.table('customers').insert(payload).select().execute()
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to create customer")
+
+    customer = result.data[0]
+    send_welcome_message(customer, biz_id)
     return customer
+
+
+@router.post("/customers/{customer_id}/send-welcome")
+def trigger_welcome(customer_id: int, user: AuthUser = Depends(get_current_user), biz_id: int = Depends(get_user_business_id)):
+    supabase = get_supabase()
+    customer = supabase.table('customers').select('*').eq('id', customer_id).eq('business_id', biz_id).execute()
+    if not customer.data:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    send_welcome_message(customer.data[0], biz_id)
+    return {"status": "welcome_sent"}
 
 
 @router.get("/customers")

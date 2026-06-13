@@ -4,7 +4,7 @@ import {
   fetchCustomers, addCustomer as dbAdd,
   updateCustomer as dbUpdate, deleteCustomer as dbDelete,
 } from '../lib/db'
-import { getDashboard, listAgents, fetchBusinessProfile, updateBusinessProfile } from '../lib/api'
+import { getDashboard, listAgents, fetchBusinessProfile, updateBusinessProfile, sendWelcome } from '../lib/api'
 
 const AppContext = createContext(null)
 
@@ -66,6 +66,11 @@ export function AppProvider({ children }) {
   const addCustomer = useCallback(async (customerData) => {
     const newCustomer = await dbAdd({ ...customerData, user_id: authUser.id, business_id: business?.id })
     setCustomers(prev => [newCustomer, ...prev])
+    try {
+      await sendWelcome(newCustomer.id)
+    } catch (e) {
+      console.warn('Welcome message not sent:', e.message)
+    }
     return newCustomer
   }, [authUser, business])
 

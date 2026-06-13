@@ -93,3 +93,7 @@ export function updateBusinessProfile(data) {
     body: JSON.stringify(data),
   })
 }
+
+export function sendWelcome(customerId) {
+  return request(`/customers/${customerId}/send-welcome`, { method: 'POST' })
+}
