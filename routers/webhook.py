@@ -145,18 +145,20 @@ async def handle_incoming_message(phone, message_text, message_id, pn_id=''):
             'content': reply,
         }).execute()
 
-        full_history = supabase.table('conversation_history').select('*').eq(
-            'customer_id', customer['id']
-        ).order('timestamp').execute()
+            full_history = supabase.table('conversation_history').select('*').eq(
+                'customer_id', customer['id']
+            ).order('timestamp').execute()
 
-        extracted = extract_notes_from_conversation(customer, business, full_history.data)
-        if extracted and not extracted.startswith('No ') and not extracted.startswith('no '):
-            existing_notes = (customer.get('notes') or '').strip()
-            timestamp = datetime.now(timezone.utc).strftime('%d %b %Y, %I:%M %p IST')
-            summary = f"\n[{timestamp}] {extracted}"
-            supabase.table('customers').update({
-                'notes': existing_notes + summary if existing_notes else extracted
-            }).eq('id', customer['id']).execute()
+            latest = supabase.table('customers').select('notes').eq('id', customer['id']).execute()
+            existing_notes = (latest.data[0].get('notes') or '').strip() if latest.data else ''
+
+            extracted = extract_notes_from_conversation(customer, business, full_history.data)
+            if extracted:
+                timestamp = datetime.now(timezone.utc).strftime('%d %b %Y, %I:%M %p IST')
+                entry = f"[{timestamp}] {extracted}"
+                supabase.table('customers').update({
+                    'notes': existing_notes + '\n' + entry if existing_notes else entry
+                }).eq('id', customer['id']).execute()
 
     except Exception as e:
         logger.error(f"Error handling incoming message: {e}")

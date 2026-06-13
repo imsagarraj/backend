@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
 from database.supabase_client import get_supabase
 from dependencies import get_current_user, get_user_business_id, AuthUser
 from database.seed import get_active_agent
@@ -104,9 +104,10 @@ def send_welcome_message(customer: dict, biz_id: int) -> dict:
             'customer_id', customer['id']
         ).order('timestamp').execute()
         extracted = extract_notes_from_conversation(customer, business, initial_history.data)
-        if extracted and not extracted.startswith('No ') and not extracted.startswith('no '):
+        if extracted:
+            timestamp = datetime.now(timezone.utc).strftime('%d %b %Y, %I:%M %p IST')
             supabase.table('customers').update({
-                'notes': extracted
+                'notes': f'[{timestamp}] {extracted}'
             }).eq('id', customer['id']).execute()
 
         return {"status": "sent", "message_id": send_result.get('message_id')}
@@ -116,7 +117,7 @@ def send_welcome_message(customer: dict, biz_id: int) -> dict:
 
 
 @router.post("/customers")
-def create_customer(data: CustomerCreate, user: AuthUser = Depends(get_current_user), biz_id: int = Depends(get_user_business_id)):
+def create_customer(data: CustomerCreate, background_tasks: BackgroundTasks, user: AuthUser = Depends(get_current_user), biz_id: int = Depends(get_user_business_id)):
     supabase = get_supabase()
     payload = data.model_dump()
     payload['user_id'] = user.id
@@ -128,8 +129,8 @@ def create_customer(data: CustomerCreate, user: AuthUser = Depends(get_current_u
         raise HTTPException(status_code=500, detail="Failed to create customer")
 
     customer = result.data[0]
-    welcome_result = send_welcome_message(customer, biz_id)
-    return {**customer, "welcome": welcome_result}
+    background_tasks.add_task(send_welcome_message, customer, biz_id)
+    return customer
 
 
 @router.get("/customers")

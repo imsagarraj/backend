@@ -276,18 +276,19 @@ def extract_notes_from_conversation(customer, business, conversation_history):
 Customer: {customer.get('name', 'Unknown')}
 Product/Service: {customer.get('product_purchased') or customer.get('product', '')}
 
-Read the conversation below and extract ONLY clinically relevant information:
+Read the conversation below and extract whatever information is available:
 
 1. Symptoms reported (pain, discomfort, issues, etc.)
 2. Any description of the condition (duration, severity, location)
 3. Customer's concerns or questions about their health
 4. Any medications, treatments, or remedies mentioned
 5. Appointment booking details if any
+6. What the agent asked or discussed with the customer
 
 Full Conversation:
 {history_text}
 
-Return a concise clinical summary. If no health-relevant information was shared, return "No clinical information shared yet."
+Return a concise summary of the conversation. If the customer hasn't shared health information yet, just summarize what was discussed so far (e.g., "Welcome message sent, asked about recovery"). Do NOT say "No clinical information shared" — always write something useful.
 Only output the summary text. Nothing else."""
     else:
         prompt = f"""You are a customer feedback analyst for {business.get('business_type', 'a business')}.
@@ -302,11 +303,12 @@ Read the conversation below and extract key information:
 3. Any compliments or positive reactions
 4. Questions or concerns the customer has
 5. Any follow-up needs
+6. What the agent asked or discussed with the customer
 
 Full Conversation:
 {history_text}
 
-Return a concise summary. If no relevant feedback was shared, return "No feedback shared yet."
+Return a concise summary of the conversation. If the customer hasn't shared feedback yet, just summarize what was discussed so far (e.g., "Welcome message sent, asked about experience"). Do NOT say "No feedback shared" — always write something useful.
 Only output the summary text. Nothing else."""
 
     try:
