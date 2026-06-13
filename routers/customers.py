@@ -22,11 +22,13 @@ class CustomerCreate(BaseModel):
     email: Optional[EmailStr] = None
     gender: Optional[str] = None
     product: str = Field(..., min_length=1, max_length=200)
-    purchase_date: date
+    purchase_date: Optional[date] = None
     order_value: Optional[float] = Field(None, ge=0)
     order_id: Optional[str] = None
     notes: Optional[str] = None
     next_booking: Optional[str] = None
+    stage: Optional[str] = None
+    status: Optional[str] = None
 
 
 class CustomerUpdate(BaseModel):
@@ -50,6 +52,8 @@ def create_customer(data: CustomerCreate, user: AuthUser = Depends(get_current_u
     payload = data.model_dump()
     payload['user_id'] = user.id
     payload['business_id'] = biz_id
+    if not payload.get('purchase_date'):
+        payload['purchase_date'] = datetime.now(timezone.utc).date().isoformat()
     result = supabase.table('customers').insert(payload).select().execute()
     if not result.data:
         raise HTTPException(status_code=500, detail="Failed to create customer")
