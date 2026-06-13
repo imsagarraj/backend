@@ -64,9 +64,12 @@ export function AppProvider({ children }) {
   }, [business?.id])
 
   const addCustomer = useCallback(async (customerData) => {
-    const newCustomer = await createCustomer(customerData)
-    setCustomers(prev => [newCustomer, ...prev])
-    return newCustomer
+    const { welcome, ...customer } = await createCustomer(customerData)
+    setCustomers(prev => [customer, ...prev])
+    if (welcome?.status !== 'sent') {
+      console.warn('Welcome message:', welcome?.status, welcome?.reason)
+    }
+    return customer
   }, [])
 
   const updateCustomer = useCallback(async (id, updates) => {
