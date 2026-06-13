@@ -7,7 +7,9 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from dotenv import load_dotenv
 from pathlib import Path
-import os
+import os, logging
+
+logger = logging.getLogger(__name__)
 
 from database.seed import seed_agents, seed_admin_users
 from routers import customers, messages, agents, webhook, analytics, dashboard, admin, business_whatsapp, business_profile
@@ -27,17 +29,16 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 ALLOWED_ORIGINS_ENV = os.getenv('ALLOWED_ORIGINS', '')
+origins = ["*"]
 if ALLOWED_ORIGINS_ENV:
     origins = [o.strip() for o in ALLOWED_ORIGINS_ENV.split(',') if o.strip()]
-else:
-    origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=origins != ["*"],
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.add_middleware(SlowAPIMiddleware)
@@ -60,19 +61,11 @@ def on_startup():
     try:
         seed_agents()
     except Exception as e:
-        print(f"Seed agents warning (non-fatal): {e}")
+        logger.warning(f"Seed agents (non-fatal): {e}")
     try:
         seed_admin_users()
     except Exception as e:
-        print(f"Seed admin users warning (non-fatal): {e}")
-    try:
-        from database.supabase_client import get_supabase
-        supabase = get_supabase()
-        biz = supabase.table('business_profiles').select('id').limit(1).execute()
-        if biz.data:
-            supabase.table('customers').update({'business_id': biz.data[0]['id']}).is_('business_id', 'null').execute()
-    except Exception as e:
-        print(f"Fix orphan customers warning (non-fatal): {e}")
+        logger.warning(f"Seed admin users (non-fatal): {e}")
 
 
 @app.get("/")
