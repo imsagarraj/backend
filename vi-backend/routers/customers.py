@@ -3,7 +3,7 @@ from database.supabase_client import get_supabase
 from dependencies import get_current_user, get_user_business_id, AuthUser
 from database.seed import get_active_agent
 from services.whatsapp_service import send_text_message
-from services.gemini_service import generate_followup_message
+from services.gemini_service import generate_followup_message, extract_notes_from_conversation
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import date, datetime, timezone
@@ -99,6 +99,15 @@ def send_welcome_message(customer: dict, biz_id: int) -> dict:
             'current_sequence_day': 0,
             'last_contact': datetime.now(timezone.utc).isoformat(),
         }).eq('id', customer['id']).execute()
+
+        initial_history = supabase.table('conversation_history').select('*').eq(
+            'customer_id', customer['id']
+        ).order('timestamp').execute()
+        extracted = extract_notes_from_conversation(customer, business, initial_history.data)
+        if extracted and not extracted.startswith('No ') and not extracted.startswith('no '):
+            supabase.table('customers').update({
+                'notes': extracted
+            }).eq('id', customer['id']).execute()
 
         return {"status": "sent", "message_id": send_result.get('message_id')}
     except Exception as e:
