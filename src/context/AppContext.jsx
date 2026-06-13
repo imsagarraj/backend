@@ -67,9 +67,14 @@ export function AppProvider({ children }) {
     const newCustomer = await dbAdd({ ...customerData, user_id: authUser.id, business_id: business?.id })
     setCustomers(prev => [newCustomer, ...prev])
     try {
-      await sendWelcome(newCustomer.id)
+      const result = await sendWelcome(newCustomer.id)
+      if (result.status === 'sent') {
+        console.log('✅ Welcome message sent')
+      } else {
+        console.warn('⚠️ Welcome message not sent:', result.reason || result.status)
+      }
     } catch (e) {
-      console.warn('Welcome message not sent:', e.message)
+      console.warn('⚠️ Welcome message error:', e.message)
     }
     return newCustomer
   }, [authUser, business])

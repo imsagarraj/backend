@@ -46,37 +46,64 @@ class CustomerUpdate(BaseModel):
     next_booking: Optional[str] = None
 
 
-def send_welcome_message(customer: dict, biz_id: int):
+def send_welcome_message(customer: dict, biz_id: int) -> dict:
     supabase = get_supabase()
     try:
         biz = supabase.table('business_profiles').select('*').eq('id', biz_id).execute()
-        if biz.data:
-            business = biz.data[0]
-            agent = get_active_agent(biz_id)
-            if agent and business.get('meta_phone_number_id'):
-                welcome_text = generate_followup_message(customer, business, agent, 0)
-                if welcome_text:
-                    send_result = send_text_message(customer['phone'], welcome_text, phone_number_id=business['meta_phone_number_id'])
-                    supabase.table('messages').insert({
-                        'customer_id': customer['id'],
-                        'business_id': biz_id,
-                        'direction': 'sent',
-                        'content': welcome_text,
-                        'status': 'sent',
-                        'meta_message_id': send_result.get('message_id'),
-                        'sequence_day': 0,
-                    }).execute()
-                    supabase.table('conversation_history').insert({
-                        'customer_id': customer['id'],
-                        'role': 'model',
-                        'content': welcome_text,
-                    }).execute()
-                    supabase.table('customers').update({
-                        'current_sequence_day': 0,
-                        'last_contact': datetime.now(timezone.utc).isoformat(),
-                    }).eq('id', customer['id']).execute()
+        if not biz.data:
+            return {"status": "skipped", "reason": "Business profile not found"}
+
+        business = biz.data[0]
+        agent = get_active_agent(biz_id)
+        if not agent:
+            return {"status": "skipped", "reason": "No active AI agent assigned"}
+
+        pn_id = business.get('meta_phone_number_id')
+        if not pn_id:
+            return {"status": "skipped", "reason": "WhatsApp not configured (no meta_phone_number_id). Save your WhatsApp number in Business Profile first."}
+
+        try:
+            welcome_text = generate_followup_message(customer, business, agent, 0)
+        except Exception as e:
+            fallback = f"Hi {customer.get('name', 'there')}! 👋 Welcome to {business.get('business_name', 'us')}. We're so glad you chose us. How are you finding your {customer.get('product', 'purchase')} so far? 😊"
+            logger.warning(f"Gemini failed, using fallback: {e}")
+            welcome_text = fallback
+
+        if not welcome_text:
+            return {"status": "skipped", "reason": "Could not generate welcome text"}
+
+        send_result = send_text_message(customer['phone'], welcome_text, phone_number_id=pn_id)
+        if send_result.get('status') != 'success':
+            return {"status": "failed", "reason": f"Meta API error: {send_result.get('response', {}).get('error', {}).get('message', send_result.get('error', 'Unknown'))}"}
+
+        supabase.table('messages').insert({
+            'customer_id': customer['id'],
+            'business_id': biz_id,
+            'direction': 'sent',
+            'content': welcome_text,
+            'status': 'sent',
+            'meta_message_id': send_result.get('message_id'),
+            'sequence_day': 0,
+        }).execute()
+
+        try:
+            supabase.table('conversation_history').insert({
+                'customer_id': customer['id'],
+                'role': 'model',
+                'content': welcome_text,
+            }).execute()
+        except Exception:
+            pass
+
+        supabase.table('customers').update({
+            'current_sequence_day': 0,
+            'last_contact': datetime.now(timezone.utc).isoformat(),
+        }).eq('id', customer['id']).execute()
+
+        return {"status": "sent", "message_id": send_result.get('message_id')}
     except Exception as e:
-        logger.error(f"Failed to send welcome message to customer {customer['id']}: {e}")
+        logger.error(f"Unexpected error sending welcome to customer {customer.get('id')}: {e}")
+        return {"status": "error", "reason": str(e)}
 
 
 @router.post("/customers")
@@ -102,8 +129,8 @@ def trigger_welcome(customer_id: int, user: AuthUser = Depends(get_current_user)
     customer = supabase.table('customers').select('*').eq('id', customer_id).eq('business_id', biz_id).execute()
     if not customer.data:
         raise HTTPException(status_code=404, detail="Customer not found")
-    send_welcome_message(customer.data[0], biz_id)
-    return {"status": "welcome_sent"}
+    result = send_welcome_message(customer.data[0], biz_id)
+    return result
 
 
 @router.get("/customers")
