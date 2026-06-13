@@ -1,8 +1,6 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from dotenv import load_dotenv
@@ -11,6 +9,7 @@ import os, logging
 
 logger = logging.getLogger(__name__)
 
+from middleware import ForceCORSMiddleware
 from database.seed import seed_agents, seed_admin_users
 from routers import customers, messages, agents, webhook, analytics, dashboard, admin, business_whatsapp, business_profile
 
@@ -28,15 +27,7 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["https://vinkspace.fun"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.add_middleware(SlowAPIMiddleware)
+app.add_middleware(ForceCORSMiddleware)
 
 API_PREFIX = "/api/v1"
 
