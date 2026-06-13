@@ -10,13 +10,17 @@ async function authHeaders() {
   }
 }
 
-async function request(path, options = {}) {
+async function request(path, options = {}, retries = 1) {
   const headers = await authHeaders()
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: { ...headers, ...options.headers },
   })
   if (!res.ok) {
+    if (retries > 0 && res.status >= 500) {
+      await new Promise(r => setTimeout(r, 2000))
+      return request(path, options, retries - 1)
+    }
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail || 'API Error')
   }

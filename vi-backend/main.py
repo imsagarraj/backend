@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from starlette.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi import Limiter
@@ -7,7 +8,6 @@ from dotenv import load_dotenv
 from pathlib import Path
 import os
 
-from middleware import ForceCORSMiddleware
 from database.seed import seed_agents, seed_admin_users
 from routers import customers, messages, agents, webhook, analytics, dashboard, admin, business_whatsapp, business_profile
 
@@ -25,7 +25,13 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-app.add_middleware(ForceCORSMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://vinkspace.fun"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=False,
+)
 
 API_PREFIX = "/api/v1"
 
