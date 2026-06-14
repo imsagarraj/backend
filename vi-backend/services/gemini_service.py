@@ -15,7 +15,7 @@ load_dotenv(env_path)
 logger = logging.getLogger(__name__)
 
 client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
-GEMINI_MODEL = 'gemini-2.5-flash'
+GEMINI_MODEL = 'gemma-4-26b-a4b-it'
 
 SEQUENCE_INSTRUCTIONS = {
     0: "Day 1 - Purchase welcome. Warm, celebratory, genuine.",
