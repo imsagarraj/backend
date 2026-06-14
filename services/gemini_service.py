@@ -46,6 +46,11 @@ BOOK_APPOINTMENT_FUNC = types.FunctionDeclaration(
 APPOINTMENT_TOOL = types.Tool(function_declarations=[BOOK_APPOINTMENT_FUNC])
 
 
+def _safe_text(response):
+    text = response.text
+    return text.strip() if text else ''
+
+
 def build_system_prompt(agent, business, customer):
     system_prompt = agent['system_prompt'].replace(
         '{business_name}', business.get('business_name', '')
@@ -68,8 +73,8 @@ Product they purchased: {customer.get('product_purchased') or customer.get('prod
         tomorrow_d = (ist_now.date() + timedelta(days=1)).isoformat()
         system_prompt += f"""
 HUMAN TOUCH RULES — Sound like a real person, not a bot:
-- React emotionally to what the customer shares. If they say they're in pain: "Oh no, that doesn't sound good at all 😟" or "I'm really sorry you're going through that."
-- If they say they're feeling better: "That's wonderful! So glad to hear that 🎉"
+- React emotionally to what the customer shares. If they say they're in pain: "Oh no, that doesn't sound good at all \U0001f61f" or "I'm really sorry you're going through that."
+- If they say they're feeling better: "That's wonderful! So glad to hear that \U0001f389"
 - Use natural expressions like "I get it", "I can imagine", "That must be tough", "Glad to hear things are looking up"
 - Mirror the customer's energy. If they're casual and using emojis, be extra warm. If they're formal, be respectful.
 - Never sound scripted. Vary your sentence structure. Sound like you're genuinely thinking and reacting.
@@ -164,7 +169,7 @@ def generate_followup_message(customer, business, agent, sequence_day):
         contents=prompt,
         config=config
     ))
-    return response.text.strip()
+    return _safe_text(response)
 
 
 def _gemini_retry(fn, max_retries=3, base_delay=2):
@@ -233,9 +238,9 @@ def generate_reply(customer, business, agent, customer_message, history, supabas
             f"Now confirm this to the customer in your own voice. "
             f"Thank them and tell them when to expect the appointment."
         ))
-        return final.text.strip()
+        return _safe_text(final)
 
-    return response.text.strip()
+    return _safe_text(response)
 
 
 def generate_appointment_message(customer, business, agent, message_type):
@@ -279,7 +284,7 @@ Only output the message text. Nothing else. No quotes.
         contents=prompt,
         config=config
     ))
-    return response.text.strip()
+    return _safe_text(response)
 
 
 def detect_personality(message_text):
@@ -363,7 +368,7 @@ IMPORTANT:
                 temperature=0.3,
             ),
         ))
-        return response.text.strip()
+        return _safe_text(response)
     except Exception as e:
         logger.error(f"Notes extraction failed: {e}")
         return None
