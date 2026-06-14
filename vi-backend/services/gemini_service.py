@@ -7,6 +7,7 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import time
 
 env_path = Path(__file__).resolve().parent.parent / '.env'
 load_dotenv(env_path)
@@ -149,12 +150,30 @@ def generate_followup_message(customer, business, agent, sequence_day):
     No quotes, no labels, no explanation.
     """
 
-    response = client.models.generate_content(
+    response = _gemini_retry(lambda: client.models.generate_content(
         model=GEMINI_MODEL,
         contents=prompt,
         config=config
-    )
+    ))
     return response.text.strip()
+
+
+def _gemini_retry(fn, max_retries=3, base_delay=2):
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            return fn()
+        except Exception as e:
+            err_str = str(e)
+            if '503' in err_str or 'UNAVAILABLE' in err_str or 'RESOURCE_EXHAUSTED' in err_str or '429' in err_str or 'quota' in err_str.lower():
+                last_error = e
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    logger.warning(f"Gemini error (attempt {attempt + 1}/{max_retries}), retrying in {delay}s: {err_str[:100]}")
+                    time.sleep(delay)
+            else:
+                raise
+    raise last_error
 
 
 def generate_reply(customer, business, agent, customer_message, history, supabase=None):
@@ -174,13 +193,13 @@ def generate_reply(customer, business, agent, customer_message, history, supabas
         temperature=0.7
     )
 
-    chat = client.chats.create(
+    chat = _gemini_retry(lambda: client.chats.create(
         model=GEMINI_MODEL,
         config=config,
         history=gemini_history
-    )
+    ))
 
-    response = chat.send_message(customer_message)
+    response = _gemini_retry(lambda: chat.send_message(customer_message))
 
     fc = response.candidates[0].content.parts[0].function_call if response.candidates else None
 
@@ -200,11 +219,11 @@ def generate_reply(customer, business, agent, customer_message, history, supabas
         confirm_msg = f"✅ Appointment booked for {date_time}" + (f" ({reason})" if reason else "")
         customer['next_booking'] = date_time
 
-        final = chat.send_message(
+        final = _gemini_retry(lambda: chat.send_message(
             f"The appointment has been booked for {date_time}. "
             f"Now confirm this to the customer in your own voice. "
             f"Thank them and tell them when to expect the appointment."
-        )
+        ))
         return final.text.strip()
 
     return response.text.strip()
@@ -246,11 +265,11 @@ Only output the message text. Nothing else. No quotes.
         temperature=0.7
     )
 
-    response = client.models.generate_content(
+    response = _gemini_retry(lambda: client.models.generate_content(
         model=GEMINI_MODEL,
         contents=prompt,
         config=config
-    )
+    ))
     return response.text.strip()
 
 
@@ -315,14 +334,14 @@ Return the summary using the numbered sections above. Be thorough — include di
 Only output the summary. Nothing else."""
 
     try:
-        response = client.models.generate_content(
+        response = _gemini_retry(lambda: client.models.generate_content(
             model=GEMINI_MODEL,
             contents=prompt,
             config=types.GenerateContentConfig(
                 max_output_tokens=600,
                 temperature=0.3,
             ),
-        )
+        ))
         return response.text.strip()
     except Exception as e:
         logger.error(f"Notes extraction failed: {e}")
