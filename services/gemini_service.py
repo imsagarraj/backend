@@ -269,54 +269,35 @@ def extract_notes_from_conversation(customer, business, conversation_history):
         for m in conversation_history
     )
     biz_type = (business.get('business_type') or '').lower()
+    product = customer.get('product_purchased') or customer.get('product', '')
 
-    if 'dental' in biz_type or 'clinic' in biz_type or 'health' in biz_type:
-        prompt = f"""You are a medical note-taking assistant for a {business.get('business_type', 'healthcare')} business.
+    prompt = f"""You are a clinical note-taking assistant for {business.get('business_name', 'the business')}, a {business.get('business_type', 'business')}.
 
 Customer: {customer.get('name', 'Unknown')}
-Product/Service: {customer.get('product_purchased') or customer.get('product', '')}
+Product/Service: {product}
 
-Read the conversation below and extract whatever information is available:
+Read the FULL conversation below. Extract EVERY detail the customer shared into a structured summary with these sections:
 
-1. Symptoms reported (pain, discomfort, issues, etc.)
-2. Any description of the condition (duration, severity, location)
-3. Customer's concerns or questions about their health
-4. Any medications, treatments, or remedies mentioned
-5. Appointment booking details if any
-6. What the agent asked or discussed with the customer
+1. **Symptoms/Complaints** — Any pain, discomfort, issues, or problems the customer reported. Include location, severity, duration, and what makes it better/worse. If dental: tooth number, type of pain (throbbing/sharp/dull), sensitivity details.
+2. **Current Status** — What is the customer feeling NOW? Is the pain/issue resolved? Improved? Same? Worse? Exact words they used.
+3. **Feedback/Review** — Exactly what the customer said about the product/service/treatment. Positive, negative, or mixed. Direct quotes if possible.
+4. **Agent's Questions & Customer's Answers** — What the agent asked and what the customer replied for each question (e.g., Asked about pain level → said 7/10; Asked about recovery → said feeling much better).
+5. **Concerns & Questions** — Any worries, doubts, or questions the customer raised.
+6. **Appointments** — Any booked appointments, reschedules, or preferences mentioned.
+7. **Communication Preferences** — Preferred time to contact, language (Hindi/English/Hinglish), response style.
 
 Full Conversation:
 {history_text}
 
-Return a concise summary of the conversation. If the customer hasn't shared health information yet, just summarize what was discussed so far (e.g., "Welcome message sent, asked about recovery"). Do NOT say "No clinical information shared" — always write something useful.
-Only output the summary text. Nothing else."""
-    else:
-        prompt = f"""You are a customer feedback analyst for {business.get('business_type', 'a business')}.
-
-Customer: {customer.get('name', 'Unknown')}
-Product/Service: {customer.get('product_purchased') or customer.get('product', '')}
-
-Read the conversation below and extract key information:
-
-1. Customer feedback about the product/service (positive, negative, or neutral)
-2. Any complaints or issues raised
-3. Any compliments or positive reactions
-4. Questions or concerns the customer has
-5. Any follow-up needs
-6. What the agent asked or discussed with the customer
-
-Full Conversation:
-{history_text}
-
-Return a concise summary of the conversation. If the customer hasn't shared feedback yet, just summarize what was discussed so far (e.g., "Welcome message sent, asked about experience"). Do NOT say "No feedback shared" — always write something useful.
-Only output the summary text. Nothing else."""
+Return the summary using the numbered sections above. Be thorough — include direct quotes where relevant. If a section has no data, write "None shared yet." Do NOT skip any section.
+Only output the summary. Nothing else."""
 
     try:
         response = client.models.generate_content(
             model=GEMINI_MODEL,
             contents=prompt,
             config=types.GenerateContentConfig(
-                max_output_tokens=300,
+                max_output_tokens=600,
                 temperature=0.3,
             ),
         )

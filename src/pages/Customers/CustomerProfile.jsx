@@ -38,7 +38,6 @@ export default function CustomerProfile() {
   const { customers, updateCustomer, deleteCustomer } = useApp()
   const customer = customers.find(c => c.id === Number(id))
   const [tab, setTab] = useState('overview')
-  const [notes, setNotes] = useState('')
   const [showEdit, setShowEdit] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -356,9 +355,21 @@ export default function CustomerProfile() {
             {tab === 'notes' && (
               <div>
                 <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginBottom: 12 }}>
-                  Internal notes are never shared with the customer.
+                  AI-extracted notes from conversations. Automatically updated after each customer reply.
                 </p>
-                <textarea className={styles.notesArea} placeholder="Add internal notes about this customer..." value={notes} onChange={e => setNotes(e.target.value)} />
+                {customer.notes ? (
+                  <div className={styles.notesDisplay}>
+                    {customer.notes.split('\n').map((line, i) => (
+                      <p key={i} className={line.startsWith('[') ? styles.notesTimestamp : styles.notesLine}>
+                        {line}
+                      </p>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.8125rem' }}>
+                    No notes yet. Notes will appear here once the AI agent has a conversation with this customer.
+                  </p>
+                )}
               </div>
             )}
           </div>
