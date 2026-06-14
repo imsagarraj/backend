@@ -14,10 +14,14 @@ load_dotenv(env_path)
 logger = logging.getLogger(__name__)
 
 client = OpenAI(
-    api_key=os.getenv('DEEPSEEK_API_KEY'),
-    base_url='https://api.deepseek.com',
+    api_key=os.getenv('OPENROUTER_API_KEY'),
+    base_url='https://openrouter.ai/api/v1',
+    default_headers={
+        'HTTP-Referer': 'https://vinkspace.fun',
+        'X-Title': 'VI Cloud',
+    },
 )
-DEEPSEEK_MODEL = 'deepseek-v4-flash'
+DEEPSEEK_MODEL = 'deepseek/deepseek-v4-flash'
 
 SEQUENCE_INSTRUCTIONS = {
     0: "Day 1 - Purchase welcome. Warm, celebratory, genuine.",

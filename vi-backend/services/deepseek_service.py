@@ -1,5 +1,4 @@
-from google import genai
-from google.genai import types
+from openai import OpenAI
 from dotenv import load_dotenv
 import os
 import emoji
@@ -14,8 +13,15 @@ load_dotenv(env_path)
 
 logger = logging.getLogger(__name__)
 
-client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
-GEMINI_MODEL = 'gemma-4-26b-a4b-it'
+client = OpenAI(
+    api_key=os.getenv('OPENROUTER_API_KEY'),
+    base_url='https://openrouter.ai/api/v1',
+    default_headers={
+        'HTTP-Referer': 'https://vinkspace.fun',
+        'X-Title': 'VI Cloud',
+    },
+)
+DEEPSEEK_MODEL = 'deepseek/deepseek-v4-flash'
 
 SEQUENCE_INSTRUCTIONS = {
     0: "Day 1 - Purchase welcome. Warm, celebratory, genuine.",
@@ -24,31 +30,34 @@ SEQUENCE_INSTRUCTIONS = {
     15: "Day 30 - Soft upsell. Natural, friendly, no pressure."
 }
 
-BOOK_APPOINTMENT_FUNC = types.FunctionDeclaration(
-    name="book_appointment",
-    description="Book a follow-up appointment for the customer when they agree to visit",
-    parameters={
-        "type": "object",
-        "properties": {
-            "date_time": {
-                "type": "string",
-                "description": "Appointment date and time in ISO 8601 format with IST timezone offset, e.g. 2026-06-15T10:00:00+05:30. CRITICAL: You MUST append +05:30 to the time so the database stores it correctly. Use the EXACT time the customer mentioned. If customer says 'tomorrow at 5pm', use the correct date with 17:00:00+05:30. Only use 10:00:00+05:30 if the customer did NOT specify any time.",
+BOOK_APPOINTMENT_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "book_appointment",
+        "description": "Book a follow-up appointment for the customer when they agree to visit",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "date_time": {
+                    "type": "string",
+                    "description": "Appointment date and time in ISO 8601 format with IST timezone offset, e.g. 2026-06-15T10:00:00+05:30. CRITICAL: You MUST append +05:30 to the time so the database stores it correctly. Use the EXACT time the customer mentioned. If customer says 'tomorrow at 5pm', use the correct date with 17:00:00+05:30. Only use 10:00:00+05:30 if the customer did NOT specify any time.",
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "Brief reason for the appointment, e.g. 'tooth pain check-up'",
+                },
             },
-            "reason": {
-                "type": "string",
-                "description": "Brief reason for the appointment, e.g. 'tooth pain check-up'",
-            },
+            "required": ["date_time"],
         },
-        "required": ["date_time"],
     },
-)
-
-APPOINTMENT_TOOL = types.Tool(function_declarations=[BOOK_APPOINTMENT_FUNC])
+}
 
 
 def _safe_text(response):
-    text = response.text
-    return text.strip() if text else ''
+    if response and response.choices:
+        content = response.choices[0].message.content
+        return content.strip() if content else ''
+    return ''
 
 
 def build_system_prompt(agent, business, customer):
@@ -142,15 +151,26 @@ IMPORTANT: This customer already has a follow-up appointment booked for {nb}.
     return system_prompt
 
 
+def _deepseek_retry(fn, max_retries=3, base_delay=2):
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            return fn()
+        except Exception as e:
+            err_str = str(e)
+            if '503' in err_str or '429' in err_str or 'quota' in err_str.lower() or 'rate' in err_str.lower() or 'timeout' in err_str.lower():
+                last_error = e
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    logger.warning(f"DeepSeek error (attempt {attempt + 1}/{max_retries}), retrying in {delay}s: {err_str[:100]}")
+                    time.sleep(delay)
+            else:
+                raise
+    raise last_error
+
+
 def generate_followup_message(customer, business, agent, sequence_day):
     system_prompt = build_system_prompt(agent, business, customer)
-
-    config = types.GenerateContentConfig(
-        system_instruction=system_prompt,
-        max_output_tokens=200,
-        temperature=0.7
-    )
-
     prompt = f"""
     Customer Name: {customer.get('name', 'Customer')}
     Product Purchased: {customer.get('product_purchased') or customer.get('product', '')}
@@ -164,61 +184,45 @@ def generate_followup_message(customer, business, agent, sequence_day):
     No quotes, no labels, no explanation.
     """
 
-    response = _gemini_retry(lambda: client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
-        config=config
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": prompt},
+    ]
+
+    response = _deepseek_retry(lambda: client.chat.completions.create(
+        model=DEEPSEEK_MODEL,
+        messages=messages,
+        max_tokens=200,
+        temperature=0.7,
     ))
     return _safe_text(response)
-
-
-def _gemini_retry(fn, max_retries=3, base_delay=2):
-    last_error = None
-    for attempt in range(max_retries):
-        try:
-            return fn()
-        except Exception as e:
-            err_str = str(e)
-            if '503' in err_str or 'UNAVAILABLE' in err_str or 'RESOURCE_EXHAUSTED' in err_str or '429' in err_str or 'quota' in err_str.lower():
-                last_error = e
-                if attempt < max_retries - 1:
-                    delay = base_delay * (2 ** attempt)
-                    logger.warning(f"Gemini error (attempt {attempt + 1}/{max_retries}), retrying in {delay}s: {err_str[:100]}")
-                    time.sleep(delay)
-            else:
-                raise
-    raise last_error
 
 
 def generate_reply(customer, business, agent, customer_message, history, supabase=None):
     system_prompt = build_system_prompt(agent, business, customer)
 
-    gemini_history = []
+    messages = [{"role": "system", "content": system_prompt}]
     for msg in history[-10:]:
-        gemini_history.append(types.Content(
-            role=msg['role'],
-            parts=[types.Part.from_text(text=msg['content'])]
-        ))
+        messages.append({
+            "role": "user" if msg['role'] == 'user' else "assistant",
+            "content": msg['content'],
+        })
+    messages.append({"role": "user", "content": customer_message})
 
-    config = types.GenerateContentConfig(
-        system_instruction=system_prompt,
-        tools=[APPOINTMENT_TOOL],
-        max_output_tokens=500,
-        temperature=0.7
-    )
-
-    chat = _gemini_retry(lambda: client.chats.create(
-        model=GEMINI_MODEL,
-        config=config,
-        history=gemini_history
+    first_call = _deepseek_retry(lambda: client.chat.completions.create(
+        model=DEEPSEEK_MODEL,
+        messages=messages,
+        max_tokens=500,
+        temperature=0.7,
+        tools=[BOOK_APPOINTMENT_TOOL],
     ))
 
-    response = _gemini_retry(lambda: chat.send_message(customer_message))
+    choice = first_call.choices[0]
+    msg = choice.message
 
-    fc = response.candidates[0].content.parts[0].function_call if response.candidates else None
-
-    if fc:
-        args = {k: v for k, v in fc.args.items()}
+    if msg.tool_calls:
+        tc = msg.tool_calls[0]
+        args = json.loads(tc.function.arguments)
         date_time = args.get('date_time', '')
         reason = args.get('reason', '')
 
@@ -230,17 +234,32 @@ def generate_reply(customer, business, agent, customer_message, history, supabas
                 'next_booking': date_time,
             }).eq('id', customer['id']).execute()
 
-        confirm_msg = f"✅ Appointment booked for {date_time}" + (f" ({reason})" if reason else "")
         customer['next_booking'] = date_time
 
-        final = _gemini_retry(lambda: chat.send_message(
-            f"The appointment has been booked for {date_time}. "
-            f"Now confirm this to the customer in your own voice. "
-            f"Thank them and tell them when to expect the appointment."
-        ))
-        return _safe_text(final)
+        messages.append({
+            "role": "assistant",
+            "content": msg.content or "",
+            "tool_calls": [{
+                "id": tc.id,
+                "type": "function",
+                "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+            }],
+        })
+        messages.append({
+            "role": "tool",
+            "tool_call_id": tc.id,
+            "content": f"Appointment booked for {date_time}" + (f" ({reason})" if reason else ""),
+        })
 
-    return _safe_text(response)
+        second = _deepseek_retry(lambda: client.chat.completions.create(
+            model=DEEPSEEK_MODEL,
+            messages=messages,
+            max_tokens=500,
+            temperature=0.7,
+        ))
+        return _safe_text(second)
+
+    return _safe_text(first_call)
 
 
 def generate_appointment_message(customer, business, agent, message_type):
@@ -273,16 +292,16 @@ if they're feeling better, and if they need anything more. Be caring, not salesy
 Only output the message text. Nothing else. No quotes.
 """
 
-    config = types.GenerateContentConfig(
-        system_instruction=system_prompt,
-        max_output_tokens=200,
-        temperature=0.7
-    )
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": prompt},
+    ]
 
-    response = _gemini_retry(lambda: client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
-        config=config
+    response = _deepseek_retry(lambda: client.chat.completions.create(
+        model=DEEPSEEK_MODEL,
+        messages=messages,
+        max_tokens=200,
+        temperature=0.7,
     ))
     return _safe_text(response)
 
@@ -323,7 +342,6 @@ def extract_notes_from_conversation(customer, business, conversation_history):
         f"{'Customer' if m['role'] == 'user' else 'Agent'}: {m['content']}"
         for m in conversation_history
     )
-    biz_type = (business.get('business_type') or '').lower()
     product = customer.get('product_purchased') or customer.get('product', '')
 
     prompt = f"""You are a clinical note-taking assistant for {business.get('business_name', 'the business')}, a {business.get('business_type', 'business')}.
@@ -359,14 +377,16 @@ IMPORTANT:
 - No greetings, no explanations, no labels like "Here is the summary".
 - Just output the sections with data. Nothing else."""
 
+    messages = [
+        {"role": "system", "content": prompt},
+    ]
+
     try:
-        response = _gemini_retry(lambda: client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                max_output_tokens=600,
-                temperature=0.3,
-            ),
+        response = _deepseek_retry(lambda: client.chat.completions.create(
+            model=DEEPSEEK_MODEL,
+            messages=messages,
+            max_tokens=600,
+            temperature=0.3,
         ))
         return _safe_text(response)
     except Exception as e:
