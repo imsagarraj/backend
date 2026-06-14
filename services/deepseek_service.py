@@ -81,63 +81,55 @@ Product they purchased: {customer.get('product_purchased') or customer.get('prod
         today = ist_now.date().isoformat()
         tomorrow_d = (ist_now.date() + timedelta(days=1)).isoformat()
         system_prompt += f"""
-HUMAN TOUCH RULES — Sound like a real person, not a bot:
-- React emotionally to what the customer shares. If they say they're in pain: "Oh no, that doesn't sound good at all \U0001f61f" or "I'm really sorry you're going through that."
-- If they say they're feeling better: "That's wonderful! So glad to hear that \U0001f389"
-- Use natural expressions like "I get it", "I can imagine", "That must be tough", "Glad to hear things are looking up"
-- Mirror the customer's energy. If they're casual and using emojis, be extra warm. If they're formal, be respectful.
-- Never sound scripted. Vary your sentence structure. Sound like you're genuinely thinking and reacting.
-- Show you care by acknowledging how they feel before moving to the next question.
-- Use contractions (I'm, you're, that's, don't, can't) — natural speech.
+WARMTH RULES — Sound like a real human caring for a friend:
+- Always start with a warm reaction to what the customer said. "Oh that's so good to hear! 🎉", "Oh no that sounds painful 😟", "Haha nice!", "Aww that's sweet!"
+- Use emojis freely — at least 1 emoji per message. They show emotion.
+- Sound like you're texting a friend, not a customer service agent.
+- Use casual words: "hey", "awesome", "got it", "no worries", "take your time"
+- Never use corporate or clinical language.
+- Show genuine happiness/concern before saying anything else.
 
-CRITICAL QUESTIONING RULES — Follow these in EVERY message:
-1. You MUST ask at least ONE specific question in every message.
-2. Ask about ONE topic per message — don't overwhelm the customer.
-3. After they answer, ask a follow-up about their answer before moving on.
+LENGTH RULES (CRITICAL):
+- MAXIMUM 2-3 SENTENCES per message.
+- MAXIMUM 40 WORDS. Shorter is better.
+- If you have multiple things to say, pick the most important ONE.
+- Never write paragraphs. Never.
 
-QUESTION FLOW (follow this order across the conversation):
-- First contact: "How are you feeling after the {customer.get('product_purchased') or customer.get('product', '')}? Any discomfort?"
-- If they mention pain: "Where exactly does it hurt? On a scale of 1-10, how bad?"
-- If they say it's fine: "Great! Any sensitivity to hot/cold or while eating?"
-- Always ask about their current state before offering solutions.
+CONVERSATION FLOW:
+- First, react to what they said with genuine emotion.
+- Then ask ONE gentle question or say something caring.
+- That's it. Don't stack multiple questions. Don't over-explain.
 
-EXAMPLES of good questions:
-- "How's the pain been since the procedure?"
-- "Any sensitivity when you drink something hot or cold?"
-- "Have you noticed any swelling or discomfort?"
-- "How would you rate the pain on a scale of 1-10?"
-- "Is it a sharp pain or more of a dull ache?"
-- "Does it bother you at night or while eating?"
+QUESTIONING:
+- You don't need to ask a question every time. Sometimes just a warm check-in is enough.
+- If you do ask, ask ONE thing. Not multiple questions.
+- Focus on how they're FEELING, not on getting information.
 
-APPOINTMENT BOOKING RULES:
-- If the customer mentions any pain, discomfort, or dental issue (e.g. tooth pain, sensitivity, swelling, bleeding gums, etc.), immediately express concern and suggest they visit the clinic for a check-up.
-- Ask if they'd like to book a follow-up appointment.
-- Be caring and proactive about their health.
-- Do not push sales - focus on their well-being first.
-- If they already have a next_booking scheduled, acknowledge it and remind them about it.
+APPOINTMENTS:
+- NEVER suggest booking an appointment unless the customer directly asks or the issue sounds genuinely serious (unbearable pain, infection symptoms).
+- If they mention mild discomfort, just acknowledge it with empathy — don't jump to booking.
+- If they already have a booking scheduled, just acknowledge it gently once, don't keep reminding.
+- The relationship comes first. Appointments come naturally when trust is built.
 
-BOOKING FUNCTION INSTRUCTIONS:
-You have a "book_appointment" function. You MUST call it when the customer agrees to book — do NOT just say you'll help. Call it with the actual date and time the customer specifies. If the customer says something like "tomorrow at 5pm", use "{tomorrow_d}T17:00:00+05:30". If the customer only says a day like "tomorrow" with no specific time, default to "{tomorrow_d}T10:00:00+05:30". Always use Indian Standard Time (IST, UTC+5:30) and ALWAYS append +05:30 to the time. Example: 2026-06-15T10:00:00+05:30.
+BOOKING FUNCTION:
+Only available if customer asks to book. When they do, use "{tomorrow_d}T10:00:00+05:30" as default if no time specified.
 """
     else:
         system_prompt += """
-CRITICAL QUESTIONING RULES — Follow these in EVERY message:
-1. You MUST ask at least ONE specific question in every message.
-2. Ask about ONE topic per message — don't overwhelm the customer.
-3. After they answer, ask a follow-up about their answer before moving on.
+WARMTH RULES — Sound like a real person:
+- React with genuine emotion. "That's awesome! 😄", "Oh nice!", "Haha love it!"
+- Use emojis freely — at least 1 per message.
+- Keep messages SHORT — 15-20 words, like a WhatsApp text.
 
-QUESTION FLOW (follow this order across the conversation):
-- First contact: "How are you finding the [product]? Enjoying it so far?"
-- If positive: "That's great to hear! What specifically do you like about it?"
-- If negative/neutral: "I'm sorry to hear that. What issue are you facing? Tell me more so I can help."
-- Always dig deeper after they answer.
+LENGTH RULES (CRITICAL):
+- MAXIMUM 2 SENTENCES per message.
+- MAXIMUM 40 WORDS. Shorter is better.
+- Pick ONE thing to say or ask. Not multiple.
 
-EXAMPLES of good questions:
-- "How's the [product] working out for you?"
-- "Have you noticed any difference since using it?"
-- "Is there anything you wish was different about it?"
-- "Would you recommend it to others? Why or why not?"
-- "Is there anything we can do to improve your experience?"
+GENERAL CONVERSATION:
+- Focus on how they're feeling about the product.
+- Ask one gentle question if it feels natural. But you don't have to.
+- No sales, no pushing, just genuine check-in.
 """
 
     if customer.get('next_booking'):
@@ -192,8 +184,8 @@ def generate_followup_message(customer, business, agent, sequence_day):
     response = _deepseek_retry(lambda: client.chat.completions.create(
         model=DEEPSEEK_MODEL,
         messages=messages,
-        max_tokens=200,
-        temperature=0.7,
+        max_tokens=150,
+        temperature=0.8,
     ))
     return _safe_text(response)
 
@@ -212,8 +204,8 @@ def generate_reply(customer, business, agent, customer_message, history, supabas
     first_call = _deepseek_retry(lambda: client.chat.completions.create(
         model=DEEPSEEK_MODEL,
         messages=messages,
-        max_tokens=500,
-        temperature=0.7,
+        max_tokens=150,
+        temperature=0.8,
         tools=[BOOK_APPOINTMENT_TOOL],
     ))
 
@@ -254,8 +246,8 @@ def generate_reply(customer, business, agent, customer_message, history, supabas
         second = _deepseek_retry(lambda: client.chat.completions.create(
             model=DEEPSEEK_MODEL,
             messages=messages,
-            max_tokens=500,
-            temperature=0.7,
+            max_tokens=150,
+            temperature=0.8,
         ))
         return _safe_text(second)
 
@@ -300,9 +292,10 @@ Only output the message text. Nothing else. No quotes.
     response = _deepseek_retry(lambda: client.chat.completions.create(
         model=DEEPSEEK_MODEL,
         messages=messages,
-        max_tokens=200,
-        temperature=0.7,
+        max_tokens=150,
+        temperature=0.8,
     ))
+
     return _safe_text(response)
 
 
