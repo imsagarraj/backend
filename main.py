@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -34,6 +35,16 @@ app.add_middleware(
     allow_headers=["*"],
     allow_credentials=False,
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error(f"Unhandled error: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+        headers={"Access-Control-Allow-Origin": "https://vinkspace.fun"},
+    )
 
 API_PREFIX = "/api/v1"
 
