@@ -4,6 +4,7 @@ supabase
 redis
 celery[redis]
 google-genai
+openai
 requests
 python-dotenv
 pydantic

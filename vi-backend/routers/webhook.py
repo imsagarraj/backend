@@ -7,7 +7,7 @@ import logging
 from database.supabase_client import get_supabase
 from database.seed import get_active_agent
 from services.whatsapp_service import send_text_message
-from services.gemini_service import generate_reply, detect_personality, extract_notes_from_conversation
+from services.deepseek_service import generate_reply, detect_personality, extract_notes_from_conversation
 from datetime import datetime, timezone
 
 env_path = Path(__file__).resolve().parent.parent / '.env'

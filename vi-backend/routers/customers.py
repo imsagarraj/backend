@@ -3,7 +3,7 @@ from database.supabase_client import get_supabase
 from dependencies import get_current_user, get_user_business_id, AuthUser
 from database.seed import get_active_agent
 from services.whatsapp_service import send_text_message
-from services.gemini_service import generate_followup_message, extract_notes_from_conversation
+from services.deepseek_service import generate_followup_message, extract_notes_from_conversation
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import date, datetime, timezone

@@ -6,7 +6,7 @@ Stages: pending_schedule -> pending_ai_gen -> ready_to_send -> sending -> sent
 
 from database.supabase_client import get_supabase
 from services.whatsapp_service import send_text_message
-from services.gemini_service import generate_followup_message, generate_appointment_message
+from services.deepseek_service import generate_followup_message, generate_appointment_message
 from database.seed import get_active_agent
 from datetime import datetime, timezone
 import logging
