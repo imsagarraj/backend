@@ -355,15 +355,19 @@ export default function CustomerProfile() {
             {tab === 'notes' && (
               <div>
                 <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginBottom: 12 }}>
-                  AI-extracted notes from conversations. Automatically updated after each customer reply.
+                  Clinical notes extracted from conversations. Updated after each customer reply.
                 </p>
                 {customer.notes ? (
                   <div className={styles.notesDisplay}>
-                    {customer.notes.split('\n').map((line, i) => (
-                      <p key={i} className={line.startsWith('[') ? styles.notesTimestamp : styles.notesLine}>
-                        {line}
-                      </p>
-                    ))}
+                    {customer.notes.split('\n').map((line, i) => {
+                      if (line.startsWith('===')) {
+                        return <p key={i} className={styles.notesSection}>{line.replace(/===/g, '').trim()}</p>
+                      }
+                      if (line.trim().startsWith('-')) {
+                        return <p key={i} className={styles.notesBullet}>{line}</p>
+                      }
+                      return <p key={i} className={styles.notesLine}>{line}</p>
+                    })}
                   </div>
                 ) : (
                   <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.8125rem' }}>

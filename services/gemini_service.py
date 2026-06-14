@@ -67,6 +67,15 @@ Product they purchased: {customer.get('product_purchased') or customer.get('prod
         today = ist_now.date().isoformat()
         tomorrow_d = (ist_now.date() + timedelta(days=1)).isoformat()
         system_prompt += f"""
+HUMAN TOUCH RULES — Sound like a real person, not a bot:
+- React emotionally to what the customer shares. If they say they're in pain: "Oh no, that doesn't sound good at all 😟" or "I'm really sorry you're going through that."
+- If they say they're feeling better: "That's wonderful! So glad to hear that 🎉"
+- Use natural expressions like "I get it", "I can imagine", "That must be tough", "Glad to hear things are looking up"
+- Mirror the customer's energy. If they're casual and using emojis, be extra warm. If they're formal, be respectful.
+- Never sound scripted. Vary your sentence structure. Sound like you're genuinely thinking and reacting.
+- Show you care by acknowledging how they feel before moving to the next question.
+- Use contractions (I'm, you're, that's, don't, can't) — natural speech.
+
 CRITICAL QUESTIONING RULES — Follow these in EVERY message:
 1. You MUST ask at least ONE specific question in every message.
 2. Ask about ONE topic per message — don't overwhelm the customer.
@@ -317,21 +326,33 @@ def extract_notes_from_conversation(customer, business, conversation_history):
 Customer: {customer.get('name', 'Unknown')}
 Product/Service: {product}
 
-Read the FULL conversation below. Extract EVERY detail the customer shared into a structured summary with these sections:
+Read the FULL conversation below and produce a clean, doctor-friendly clinical note in this format:
 
-1. **Symptoms/Complaints** — Any pain, discomfort, issues, or problems the customer reported. Include location, severity, duration, and what makes it better/worse. If dental: tooth number, type of pain (throbbing/sharp/dull), sensitivity details.
-2. **Current Status** — What is the customer feeling NOW? Is the pain/issue resolved? Improved? Same? Worse? Exact words they used.
-3. **Feedback/Review** — Exactly what the customer said about the product/service/treatment. Positive, negative, or mixed. Direct quotes if possible.
-4. **Agent's Questions & Customer's Answers** — What the agent asked and what the customer replied for each question (e.g., Asked about pain level → said 7/10; Asked about recovery → said feeling much better).
-5. **Concerns & Questions** — Any worries, doubts, or questions the customer raised.
-6. **Appointments** — Any booked appointments, reschedules, or preferences mentioned.
-7. **Communication Preferences** — Preferred time to contact, language (Hindi/English/Hinglish), response style.
+=== Symptoms & Complaints ===
+Bullet points only. What hurts, where, how bad (scale 1-10), type of pain (sharp/dull/throbbing), duration, triggers. If nothing shared: skip section.
+
+=== Current Status ===
+One line summarizing how the patient is feeling NOW. Exact words if relevant.
+If nothing shared: skip section.
+
+=== Key Feedback ===
+Brief notes on what the customer said about the treatment/product. Include direct quotes in "quotes".
+If nothing shared: skip section.
+
+=== Appointments ===
+Any booked follow-ups, reschedules, or preferences.
+If nothing shared: skip section.
 
 Full Conversation:
 {history_text}
 
-Return the summary using the numbered sections above. Be thorough — include direct quotes where relevant. If a section has no data, write "None shared yet." Do NOT skip any section.
-Only output the summary. Nothing else."""
+IMPORTANT:
+- ONLY include sections that have actual data. Skip empty sections entirely.
+- Be BRIEF. A doctor should read this in 10 seconds.
+- Use bullet points (-), not numbers.
+- No markdown formatting other than simple bullet points.
+- No greetings, no explanations, no labels like "Here is the summary".
+- Just output the sections with data. Nothing else."""
 
     try:
         response = _gemini_retry(lambda: client.models.generate_content(
