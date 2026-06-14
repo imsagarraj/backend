@@ -119,7 +119,7 @@ def send_welcome_message(customer: dict, biz_id: int) -> dict:
 @router.post("/customers")
 def create_customer(data: CustomerCreate, background_tasks: BackgroundTasks, user: AuthUser = Depends(get_current_user), biz_id: int = Depends(get_user_business_id)):
     supabase = get_supabase()
-    payload = data.model_dump()
+    payload = data.model_dump(mode='json')
     payload['user_id'] = user.id
     payload['business_id'] = biz_id
     if not payload.get('purchase_date'):
@@ -160,7 +160,7 @@ def get_customer(customer_id: int, user: AuthUser = Depends(get_current_user)):
 @router.put("/customers/{customer_id}")
 def update_customer(customer_id: int, data: CustomerUpdate, user: AuthUser = Depends(get_current_user)):
     supabase = get_supabase()
-    payload = {k: v for k, v in data.model_dump(exclude_unset=True).items() if v is not None}
+    payload = {k: v for k, v in data.model_dump(exclude_unset=True, mode='json').items() if v is not None}
     result = supabase.table('customers').update(payload).eq('id', customer_id).eq('user_id', user.id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Customer not found")

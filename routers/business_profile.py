@@ -37,7 +37,7 @@ class BusinessProfileUpdate(BaseModel):
 def upsert_business_profile(data: BusinessProfileUpdate, user: AuthUser = Depends(get_current_user)):
     supabase = get_supabase()
 
-    payload = data.model_dump(exclude_none=True)
+    payload = data.model_dump(exclude_none=True, mode='json')
     payload['user_id'] = user.id
 
     existing = supabase.table('business_profiles').select('id, whatsapp, meta_phone_number_id').eq('user_id', user.id).execute()
