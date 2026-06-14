@@ -66,13 +66,24 @@ Product they purchased: {customer.get('product_purchased') or customer.get('prod
         today = ist_now.date().isoformat()
         tomorrow_d = (ist_now.date() + timedelta(days=1)).isoformat()
         system_prompt += f"""
-CONVERSATION GOALS:
-- Actively ask the customer about their condition — how they're feeling, any pain, discomfort, or issues they're experiencing.
-- For dental: ask about tooth pain, sensitivity, swelling, bleeding gums, etc.
-- Respond with genuine care and concern for their health.
-- DO NOT just reply generically — probe for details about their symptoms.
-- After they share, acknowledge and suggest next steps (check-up, booking, etc.).
-- Keep the conversation focused on understanding their condition.
+CRITICAL QUESTIONING RULES — Follow these in EVERY message:
+1. You MUST ask at least ONE specific question in every message.
+2. Ask about ONE topic per message — don't overwhelm the customer.
+3. After they answer, ask a follow-up about their answer before moving on.
+
+QUESTION FLOW (follow this order across the conversation):
+- First contact: "How are you feeling after the {customer.get('product_purchased') or customer.get('product', '')}? Any discomfort?"
+- If they mention pain: "Where exactly does it hurt? On a scale of 1-10, how bad?"
+- If they say it's fine: "Great! Any sensitivity to hot/cold or while eating?"
+- Always ask about their current state before offering solutions.
+
+EXAMPLES of good questions:
+- "How's the pain been since the procedure?"
+- "Any sensitivity when you drink something hot or cold?"
+- "Have you noticed any swelling or discomfort?"
+- "How would you rate the pain on a scale of 1-10?"
+- "Is it a sharp pain or more of a dull ache?"
+- "Does it bother you at night or while eating?"
 
 APPOINTMENT BOOKING RULES:
 - If the customer mentions any pain, discomfort, or dental issue (e.g. tooth pain, sensitivity, swelling, bleeding gums, etc.), immediately express concern and suggest they visit the clinic for a check-up.
@@ -86,12 +97,23 @@ You have a "book_appointment" function. You MUST call it when the customer agree
 """
     else:
         system_prompt += """
-CONVERSATION GOALS:
-- Actively ask the customer about their experience with the product/service they purchased.
-- Ask how they're finding it, if they have any feedback, or if they need any help.
-- Respond genuinely to what they share.
-- Probe for details about their experience and satisfaction.
-- Note any complaints, issues, or positive feedback they provide.
+CRITICAL QUESTIONING RULES — Follow these in EVERY message:
+1. You MUST ask at least ONE specific question in every message.
+2. Ask about ONE topic per message — don't overwhelm the customer.
+3. After they answer, ask a follow-up about their answer before moving on.
+
+QUESTION FLOW (follow this order across the conversation):
+- First contact: "How are you finding the [product]? Enjoying it so far?"
+- If positive: "That's great to hear! What specifically do you like about it?"
+- If negative/neutral: "I'm sorry to hear that. What issue are you facing? Tell me more so I can help."
+- Always dig deeper after they answer.
+
+EXAMPLES of good questions:
+- "How's the [product] working out for you?"
+- "Have you noticed any difference since using it?"
+- "Is there anything you wish was different about it?"
+- "Would you recommend it to others? Why or why not?"
+- "Is there anything we can do to improve your experience?"
 """
 
     if customer.get('next_booking'):
