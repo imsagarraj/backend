@@ -256,14 +256,10 @@ export default function CustomerProfile() {
                 <h4 style={{ fontSize: '0.875rem', fontWeight: 600, margin: '20px 0 12px' }}>Follow-up Sequence Progress</h4>
                 <div className={styles.timeline}>
                   {['Day 1', 'Day 3', 'Day 15', 'Day 30'].map((day, i) => {
-                    const dayNum = [1, 3, 15, 30][i]
-                    const dayMessages = messages.filter(m => {
-                      if (!m.timestamp) return false
-                      const daysSinceMsg = (Date.now() - new Date(m.timestamp).getTime()) / 86400000
-                      return m.direction === 'sent' && daysSinceMsg < dayNum + 3
-                    })
+                    const sequenceDayValue = [0, 1, 3, 15][i]
+                    const dayMessages = messages.filter(m => m.direction === 'sent' && m.sequence_day === sequenceDayValue)
                     const isDone = dayMessages.length > 0
-                    const isCurrent = !isDone && i === 0
+                    const isCurrent = !isDone && customer.current_sequence_day === sequenceDayValue
                     return (
                       <div key={day} className={styles.timelineItem}>
                         <div className={`${styles.timelineDot} ${isDone ? styles.timelineDone : isCurrent ? styles.timelineCurrent : styles.timelinePending}`}>
