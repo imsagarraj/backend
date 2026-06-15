@@ -1,3 +1,6 @@
+import sentry_sdk
+from sentry_sdk.integrations.starlette import StarletteIntegration
+from sentry_sdk.integrations.fastapi import FastApiIntegration
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
@@ -8,6 +11,16 @@ from slowapi.util import get_remote_address
 from dotenv import load_dotenv
 from pathlib import Path
 import os, logging
+
+sentry_sdk.init(
+    dsn=os.environ.get("SENTRY_DSN"),
+    enable_tracing=False,
+    send_default_pii=True,
+    integrations=[
+        StarletteIntegration(),
+        FastApiIntegration(),
+    ],
+)
 
 logger = logging.getLogger(__name__)
 

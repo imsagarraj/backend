@@ -1,4 +1,8 @@
+import sentry_sdk
+from sentry_sdk.integrations.starlette import StarletteIntegration
+from sentry_sdk.integrations.fastapi import FastApiIntegration
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -6,7 +10,19 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from dotenv import load_dotenv
 from pathlib import Path
-import os
+import os, logging
+
+sentry_sdk.init(
+    dsn=os.environ.get("SENTRY_DSN"),
+    enable_tracing=False,
+    send_default_pii=True,
+    integrations=[
+        StarletteIntegration(),
+        FastApiIntegration(),
+    ],
+)
+
+logger = logging.getLogger(__name__)
 
 from database.seed import seed_agents, seed_admin_users
 from routers import customers, messages, agents, webhook, analytics, dashboard, admin, business_whatsapp, business_profile
@@ -33,6 +49,16 @@ app.add_middleware(
     allow_credentials=False,
 )
 
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error(f"Unhandled error: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+        headers={"Access-Control-Allow-Origin": "https://vinkspace.fun"},
+    )
+
 API_PREFIX = "/api/v1"
 
 app.include_router(webhook.router, prefix=API_PREFIX, tags=["webhook"])
@@ -51,19 +77,11 @@ def on_startup():
     try:
         seed_agents()
     except Exception as e:
-        print(f"Seed agents warning (non-fatal): {e}")
+        logger.warning(f"Seed agents (non-fatal): {e}")
     try:
         seed_admin_users()
     except Exception as e:
-        print(f"Seed admin users warning (non-fatal): {e}")
-    try:
-        from database.supabase_client import get_supabase
-        supabase = get_supabase()
-        biz = supabase.table('business_profiles').select('id').limit(1).execute()
-        if biz.data:
-            supabase.table('customers').update({'business_id': biz.data[0]['id']}).is_('business_id', 'null').execute()
-    except Exception as e:
-        print(f"Fix orphan customers warning (non-fatal): {e}")
+        logger.warning(f"Seed admin users (non-fatal): {e}")
 
 
 @app.get("/")
