@@ -6,7 +6,7 @@ import logging
 
 from database.supabase_client import get_supabase
 from database.seed import get_active_agent
-from services.whatsapp_service import send_text_message
+from services.whatsapp_service import send_text_message, send_typing_indicator, mark_message_read
 from services.deepseek_service import generate_reply, detect_personality, extract_notes_from_conversation
 from datetime import datetime, timezone
 
@@ -125,9 +125,12 @@ async def handle_incoming_message(phone, message_text, message_id, pn_id=''):
             logger.error(f"No agent available for business {biz_id}")
             return
 
+        pn_id = business.get('meta_phone_number_id')
+        mark_message_read(message_id, pn_id)
+        send_typing_indicator(phone, pn_id)
+
         reply = generate_reply(customer, business, agent, message_text, history.data, supabase)
 
-        pn_id = business.get('meta_phone_number_id')
         send_result = send_text_message(phone, reply, phone_number_id=pn_id)
 
         supabase.table('messages').insert({

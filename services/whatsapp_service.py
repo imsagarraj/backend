@@ -77,6 +77,21 @@ def send_template_message(phone, template_name, params, phone_number_id=None):
         return {"status": "failed", "error": str(e)}
 
 
+def send_typing_indicator(phone, phone_number_id=None):
+    to = _clean_phone(phone)
+    payload = {
+        'messaging_product': 'whatsapp',
+        'recipient_type': 'individual',
+        'to': to,
+        'type': 'action',
+        'action': {'name': 'typing_on'},
+    }
+    try:
+        requests.post(_get_api_url(phone_number_id), json=payload, headers=_get_headers())
+    except Exception:
+        pass
+
+
 def mark_message_read(message_id, phone_number_id=None):
     payload = {
         'messaging_product': 'whatsapp',
