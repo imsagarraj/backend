@@ -77,14 +77,13 @@ def send_template_message(phone, template_name, params, phone_number_id=None):
         return {"status": "failed", "error": str(e)}
 
 
-def send_typing_indicator(phone, phone_number_id=None):
+def send_read_and_typing(phone, message_id, phone_number_id=None):
     to = _clean_phone(phone)
     payload = {
         'messaging_product': 'whatsapp',
-        'recipient_type': 'individual',
-        'to': to,
-        'type': 'action',
-        'action': {'name': 'typing_on'},
+        'status': 'read',
+        'message_id': message_id,
+        'typing_indicator': {'type': 'text'},
     }
     try:
         requests.post(_get_api_url(phone_number_id), json=payload, headers=_get_headers())
