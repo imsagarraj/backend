@@ -90,11 +90,6 @@ def root():
     return {"message": "Vi Platform Backend v2.0", "status": "running"}
 
 
-@app.get("/debug-sentry")
-def debug_sentry():
-    raise ValueError("Test Sentry error — ignore this")
-
-
 @app.get("/health")
 def health():
     return {"status": "healthy"}
