@@ -52,6 +52,7 @@ app.add_middleware(
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
+    sentry_sdk.capture_exception(exc)
     logger.error(f"Unhandled error: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
@@ -87,6 +88,11 @@ def on_startup():
 @app.get("/")
 def root():
     return {"message": "Vi Platform Backend v2.0", "status": "running"}
+
+
+@app.get("/debug-sentry")
+def debug_sentry():
+    raise ValueError("Test Sentry error — ignore this")
 
 
 @app.get("/health")
