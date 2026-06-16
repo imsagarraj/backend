@@ -74,3 +74,40 @@ export function updateBusinessProfile(data) {
     body: JSON.stringify(data),
   })
 }
+
+export function listCampaigns() {
+  return request('/campaigns')
+}
+
+export function createCampaign(data) {
+  return request('/campaigns', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export function sendCampaign(campaignId) {
+  return request(`/campaigns/${campaignId}/send`, {
+    method: 'POST',
+  })
+}
+
+export function estimateCampaignAudience(data) {
+  return request('/campaigns/estimate', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export function updateCampaign(campaignId, data) {
+  return request(`/campaigns/${campaignId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  })
+}
+
+export function deleteCampaign(campaignId) {
+  return request(`/campaigns/${campaignId}`, {
+    method: 'DELETE',
+  })
+}

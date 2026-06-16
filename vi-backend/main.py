@@ -25,7 +25,7 @@ sentry_sdk.init(
 logger = logging.getLogger(__name__)
 
 from database.seed import seed_agents, seed_admin_users
-from routers import customers, messages, agents, webhook, analytics, dashboard, admin, business_whatsapp, business_profile
+from routers import customers, messages, agents, webhook, analytics, dashboard, admin, business_whatsapp, business_profile, campaigns
 
 env_path = Path(__file__).resolve().parent / '.env'
 load_dotenv(env_path)
@@ -71,6 +71,7 @@ app.include_router(dashboard.router, prefix=API_PREFIX, tags=["dashboard"])
 app.include_router(admin.router, prefix=API_PREFIX, tags=["admin"])
 app.include_router(business_whatsapp.router, prefix=API_PREFIX, tags=["business_whatsapp"])
 app.include_router(business_profile.router, prefix=API_PREFIX, tags=["business_profile"])
+app.include_router(campaigns.router, prefix=API_PREFIX, tags=["campaigns"])
 
 
 @app.on_event("startup")
