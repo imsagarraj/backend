@@ -327,7 +327,7 @@ def detect_personality(message_text):
     return ','.join(tags) if tags else 'neutral'
 
 
-def extract_notes_from_conversation(customer, business, conversation_history):
+def extract_notes_from_conversation(customer, business, conversation_history, existing_notes=None):
     if not conversation_history:
         return None
 
@@ -337,11 +337,18 @@ def extract_notes_from_conversation(customer, business, conversation_history):
     )
     product = customer.get('product_purchased') or customer.get('product', '')
 
+    existing_block = ""
+    if existing_notes:
+        existing_block = f"""
+Previous notes (merge new info into these, don't discard what's still relevant):
+{existing_notes}
+"""
+
     prompt = f"""You are a clinical note-taking assistant for {business.get('business_name', 'the business')}, a {business.get('business_type', 'business')}.
 
 Customer: {customer.get('name', 'Unknown')}
 Product/Service: {product}
-
+{existing_block}
 Read the FULL conversation below and produce a clean, doctor-friendly clinical note in this format:
 
 === Symptoms & Complaints ===
@@ -368,7 +375,8 @@ IMPORTANT:
 - Use bullet points (-), not numbers.
 - No markdown formatting other than simple bullet points.
 - No greetings, no explanations, no labels like "Here is the summary".
-- Just output the sections with data. Nothing else."""
+- Just output the sections with data. Nothing else.
+- If previous notes were provided, UPDATE them with new info from the latest conversation. Keep what's still accurate, add what's new."""
 
     messages = [
         {"role": "system", "content": prompt},

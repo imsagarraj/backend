@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useApp } from '../../context/AppContext'
-import { getMessages, sendMessage, generateNotes } from '../../lib/api'
+import { getMessages, sendMessage } from '../../lib/api'
 import styles from './CustomerProfile.module.css'
 
 function getInitials(name) {
@@ -46,7 +46,6 @@ export default function CustomerProfile() {
   const [messagesLoading, setMessagesLoading] = useState(false)
   const [replyText, setReplyText] = useState('')
   const [sendingMessage, setSendingMessage] = useState(false)
-  const [generatingNotes, setGeneratingNotes] = useState(false)
 
   useEffect(() => {
     if (id) {
@@ -69,19 +68,6 @@ export default function CustomerProfile() {
       console.error('Send failed:', err)
     } finally {
       setSendingMessage(false)
-    }
-  }
-
-  const handleGenerateNotes = async () => {
-    if (!id) return
-    setGeneratingNotes(true)
-    try {
-      const result = await generateNotes(Number(id))
-      if (result.notes) updateCustomer(Number(id), { notes: result.notes })
-    } catch (err) {
-      console.error('Generate notes failed:', err)
-    } finally {
-      setGeneratingNotes(false)
     }
   }
 
@@ -364,19 +350,9 @@ export default function CustomerProfile() {
 
             {tab === 'notes' && (
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', margin: 0 }}>
-                    Summary of all conversations. Click generate when conversation is done.
-                  </p>
-                  <button
-                    className={styles.saveBtn}
-                    onClick={handleGenerateNotes}
-                    disabled={generatingNotes}
-                    style={{ padding: '6px 14px', fontSize: '0.6875rem', whiteSpace: 'nowrap' }}
-                  >
-                    {generatingNotes ? 'Generating...' : 'Generate Summary'}
-                  </button>
-                </div>
+                <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginBottom: 12 }}>
+                  Clinical notes extracted from conversations. Auto-updated after each customer reply.
+                </p>
                 {customer.notes ? (
                   <div className={styles.notesDisplay}>
                     {customer.notes.split('\n').map((line, i) => {
@@ -391,7 +367,7 @@ export default function CustomerProfile() {
                   </div>
                 ) : (
                   <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.8125rem' }}>
-                    No notes yet. Click "Generate Summary" after a conversation is done.
+                    No notes yet. Notes will appear here after the first conversation.
                   </p>
                 )}
               </div>

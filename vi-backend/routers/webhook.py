@@ -7,7 +7,7 @@ import logging
 from database.supabase_client import get_supabase
 from database.seed import get_active_agent
 from services.whatsapp_service import send_text_message, send_read_and_typing
-from services.deepseek_service import generate_reply, detect_personality
+from services.deepseek_service import generate_reply, detect_personality, extract_notes_from_conversation
 from datetime import datetime, timezone
 
 env_path = Path(__file__).resolve().parent.parent / '.env'
@@ -146,6 +146,19 @@ async def handle_incoming_message(phone, message_text, message_id, pn_id=''):
             'role': 'model',
             'content': reply,
         }).execute()
+
+        full_history = supabase.table('conversation_history').select('*').eq(
+            'customer_id', customer['id']
+        ).order('timestamp').execute()
+
+        latest_notes = supabase.table('customers').select('notes').eq('id', customer['id']).execute()
+        existing_notes = (latest_notes.data[0].get('notes') or '').strip() if latest_notes.data else None
+
+        extracted = extract_notes_from_conversation(customer, business, full_history.data, existing_notes)  # noqa: F821
+        if extracted:
+            supabase.table('customers').update({
+                'notes': extracted
+            }).eq('id', customer['id']).execute()
 
     except Exception as e:
         logger.error(f"Error handling incoming message: {e}")
