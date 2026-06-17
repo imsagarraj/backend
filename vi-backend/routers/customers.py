@@ -3,7 +3,7 @@ from database.supabase_client import get_supabase
 from dependencies import get_current_user, get_user_business_id, AuthUser
 from database.seed import get_active_agent
 from services.whatsapp_service import send_text_message
-from services.deepseek_service import generate_followup_message, extract_notes_from_conversation
+from services.deepseek_service import generate_followup_message
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import date, datetime, timezone
@@ -100,16 +100,6 @@ def send_welcome_message(customer: dict, biz_id: int) -> dict:
             'last_contact': datetime.now(timezone.utc).isoformat(),
         }).eq('id', customer['id']).execute()
 
-        initial_history = supabase.table('conversation_history').select('*').eq(
-            'customer_id', customer['id']
-        ).order('timestamp').execute()
-        extracted = extract_notes_from_conversation(customer, business, initial_history.data)
-        if extracted:
-            timestamp = datetime.now(timezone.utc).strftime('%d %b %Y, %I:%M %p IST')
-            supabase.table('customers').update({
-                'notes': f'[{timestamp}] {extracted}'
-            }).eq('id', customer['id']).execute()
-
         return {"status": "sent", "message_id": send_result.get('message_id')}
     except Exception as e:
         logger.error(f"Unexpected error sending welcome to customer {customer.get('id')}: {e}")
@@ -188,6 +178,37 @@ def resume_customer(customer_id: int, user: AuthUser = Depends(get_current_user)
     supabase = get_supabase()
     result = supabase.table('customers').update({'status': 'active'}).eq('id', customer_id).eq('user_id', user.id).execute()
     return {"status": "resumed"}
+
+
+@router.post("/customers/{customer_id}/generate-notes")
+def generate_customer_notes(customer_id: int, user: AuthUser = Depends(get_current_user)):
+    from services.deepseek_service import extract_notes_from_conversation as _extract
+
+    supabase = get_supabase()
+
+    customer = supabase.table('customers').select('*').eq('id', customer_id).eq('user_id', user.id).execute()
+    if not customer.data:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    customer = customer.data[0]
+
+    biz_id = customer.get('business_id')
+    business = supabase.table('business_profiles').select('*').eq('id', biz_id).execute()
+    if not business.data:
+        raise HTTPException(status_code=404, detail="Business not found")
+
+    full_history = supabase.table('conversation_history').select('*').eq(
+        'customer_id', customer_id
+    ).order('timestamp').execute()
+
+    extracted = _extract(customer, business.data[0], full_history.data)
+    if not extracted:
+        raise HTTPException(status_code=500, detail="Failed to generate notes")
+
+    timestamp = datetime.now(timezone.utc).strftime('%d %b %Y, %I:%M %p IST')
+    entry = f"[{timestamp}] {extracted}"
+    supabase.table('customers').update({'notes': entry}).eq('id', customer_id).execute()
+
+    return {"status": "generated", "notes": entry}
 
 
 @router.post("/customers/import")

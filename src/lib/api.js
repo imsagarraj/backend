@@ -64,6 +64,12 @@ export function createCustomer(data) {
   })
 }
 
+export function generateNotes(customerId) {
+  return request(`/customers/${customerId}/generate-notes`, {
+    method: 'POST',
+  })
+}
+
 export function fetchBusinessProfile() {
   return request('/business-profile')
 }
