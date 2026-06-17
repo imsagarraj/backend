@@ -10,7 +10,7 @@ router = APIRouter()
 @router.get("/dashboard")
 def get_dashboard(user: AuthUser = Depends(get_current_user)):
     supabase = get_supabase()
-    biz = supabase.table('business_profiles').select('id').eq('user_id', user.id).execute()
+    biz = supabase.table('business_profiles').select('id, active_agent_id').eq('user_id', user.id).execute()
     if not biz.data:
         raise HTTPException(status_code=404, detail="Business profile not found")
     business_id = biz.data[0]['id']

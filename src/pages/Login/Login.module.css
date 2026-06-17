@@ -63,7 +63,7 @@
   width: 100%;
   padding: 12px 14px;
   border-radius: 10px;
-  border: 1px solid var(--color-border-warm-light);
+  border: 1px solid var(--color-border);
   background: var(--color-bg-card);
   font-family: var(--font-sans);
   font-size: 0.9375rem;

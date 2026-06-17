@@ -24,10 +24,8 @@
   --color-accent-light: #f5e6d8;
   --color-accent-dim: rgba(200, 90, 26, 0.08);
 
-  --color-border: #F2DECE;
-  --color-border-light: #EBCEB7;
-  --color-border-warm: #EBCEB7;
-  --color-border-warm-light: #F2DECE;
+  --color-border: #e5e7eb;
+  --color-border-light: #d1d5db;
 
   --color-success: #10b981;
   --color-success-dim: rgba(16, 185, 129, 0.1);
