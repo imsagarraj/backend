@@ -351,18 +351,41 @@ export default function CustomerProfile() {
             {tab === 'notes' && (
               <div>
                 <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginBottom: 12 }}>
-                  Clinical notes extracted from conversations. Updated after each customer reply.
+                  Key points extracted from conversations. Updated after each customer reply.
                 </p>
                 {customer.notes ? (
-                  <div className={styles.notesDisplay}>
-                    {customer.notes.split('\n').map((line, i) => {
-                      if (line.startsWith('===')) {
-                        return <p key={i} className={styles.notesSection}>{line.replace(/===/g, '').trim()}</p>
-                      }
-                      if (line.trim().startsWith('-')) {
-                        return <p key={i} className={styles.notesBullet}>{line}</p>
-                      }
-                      return <p key={i} className={styles.notesLine}>{line}</p>
+                  <div className={styles.notesFlow}>
+                    {customer.notes.split('\n').filter(Boolean).map((entry, i) => {
+                      const tsMatch = entry.match(/^\[(.*?)\]\s*(.*)/)
+                      const timestamp = tsMatch ? tsMatch[1] : null
+                      const content = tsMatch ? tsMatch[2] : entry
+
+                      const problemMatch = content.match(/^PROBLEM:\s*(.*)/)
+                      const feedbackMatch = content.match(/^FEEDBACK:\s*(.*)/)
+                      const statusMatch = content.match(/^STATUS:\s*(.*)/)
+                      const appointmentMatch = content.match(/^APPOINTMENT:\s*(.*)/)
+
+                      let type = 'info'
+                      let icon = '•'
+                      if (problemMatch) { type = 'problem'; icon = '⚠' }
+                      else if (feedbackMatch) { type = 'feedback'; icon = '💬' }
+                      else if (statusMatch) { type = 'status'; icon = '📌' }
+                      else if (appointmentMatch) { type = 'appointment'; icon = '📅' }
+
+                      const text = problemMatch?.[1] || feedbackMatch?.[1] || statusMatch?.[1] || appointmentMatch?.[1] || content
+
+                      return (
+                        <div key={i} className={`${styles.flowCard} ${styles[`flowCard${type.charAt(0).toUpperCase() + type.slice(1)}`]}`}>
+                          <div className={styles.flowCardIcon}>{icon}</div>
+                          <div className={styles.flowCardBody}>
+                            {timestamp && <div className={styles.flowCardTime}>{timestamp}</div>}
+                            <div className={styles.flowCardLabel}>
+                              {problemMatch ? 'Problem' : feedbackMatch ? 'Feedback' : statusMatch ? 'Status' : appointmentMatch ? 'Appointment' : 'Note'}
+                            </div>
+                            <div className={styles.flowCardText}>{text}</div>
+                          </div>
+                        </div>
+                      )
                     })}
                   </div>
                 ) : (

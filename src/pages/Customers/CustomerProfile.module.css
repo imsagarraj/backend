@@ -288,68 +288,75 @@
   transition: width 0.5s ease;
 }
 
-.notesArea {
-  width: 100%;
-  min-height: 200px;
-  padding: 12px;
+.notesFlow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.flowCard {
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
   border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-border);
   background: var(--color-bg);
-  font-size: 0.8125rem;
-  color: var(--color-text);
-  resize: vertical;
-  outline: none;
+  transition: border-color 0.15s;
 }
 
-.notesArea:focus {
-  border-color: var(--color-accent);
+.flowCardProblem { border-left-color: #ef4444; }
+.flowCardFeedback { border-left-color: var(--color-accent); }
+.flowCardStatus { border-left-color: #3b82f6; }
+.flowCardAppointment { border-left-color: #10b981; }
+.flowCardInfo { border-left-color: var(--color-border); }
+
+.flowCardIcon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6875rem;
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
-.notesDisplay {
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 16px;
-  font-size: 0.8125rem;
-  line-height: 1.7;
-  white-space: pre-wrap;
-  word-break: break-word;
+.flowCardProblem .flowCardIcon { background: rgba(239,68,68,0.1); }
+.flowCardFeedback .flowCardIcon { background: rgba(200,90,26,0.1); }
+.flowCardStatus .flowCardIcon { background: rgba(59,130,246,0.1); }
+.flowCardAppointment .flowCardIcon { background: rgba(16,185,129,0.1); }
+.flowCardInfo .flowCardIcon { background: var(--color-border); }
+
+.flowCardBody {
+  flex: 1;
+  min-width: 0;
 }
 
-.notesSection {
-  margin: 16px 0 8px;
+.flowCardTime {
+  font-size: 0.5625rem;
+  color: var(--color-text-muted);
+  margin-bottom: 2px;
+}
+
+.flowCardLabel {
+  font-size: 0.625rem;
   font-weight: 700;
-  font-size: 0.75rem;
-  color: var(--color-accent);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.04em;
+  margin-bottom: 3px;
 }
 
-.notesSection:first-of-type {
-  margin-top: 0;
-}
+.flowCardProblem .flowCardLabel { color: #ef4444; }
+.flowCardFeedback .flowCardLabel { color: var(--color-accent); }
+.flowCardStatus .flowCardLabel { color: #3b82f6; }
+.flowCardAppointment .flowCardLabel { color: #10b981; }
+.flowCardInfo .flowCardLabel { color: var(--color-text-muted); }
 
-.notesBullet {
-  margin: 0 0 4px 12px;
+.flowCardText {
+  font-size: 0.8125rem;
   color: var(--color-text);
-  font-size: 0.8rem;
-  position: relative;
-}
-
-.notesLine {
-  margin: 0 0 4px;
-  color: var(--color-text);
-}
-
-.notesTimestamp {
-  margin: 12px 0 4px;
-  color: var(--color-accent);
-  font-weight: 600;
-  font-size: 0.75rem;
-}
-
-.notesTimestamp:first-child {
-  margin-top: 0;
+  line-height: 1.5;
 }
 
 .replyBox {

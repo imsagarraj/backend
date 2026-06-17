@@ -165,50 +165,53 @@ export default function Settings() {
         <div className={styles.dangerZone}>
           <div className={styles.dangerTitle}>Danger Zone</div>
           <div className={styles.dangerText}>These actions are irreversible. Please proceed with caution.</div>
-
-          {!showDeleteConfirm ? (
-            <button className={styles.dangerBtn} onClick={() => setShowDeleteConfirm(true)}>
-              Delete Account Permanently
-            </button>
-          ) : (
-            <div className={styles.deleteConfirm}>
-              {error && <div className={styles.deleteError}>{error}</div>}
-              <p className={styles.deleteConfirmText}>
-                This will permanently delete your entire business account, all customers, messages, campaigns, and settings. <strong>This cannot be undone.</strong>
-              </p>
-              <p className={styles.deleteConfirmLabel}>Type <strong>DELETE</strong> to confirm:</p>
-              <input
-                className={styles.deleteConfirmInput}
-                type="text"
-                placeholder="Type DELETE"
-                value={deleteConfirmText}
-                onChange={e => setDeleteConfirmText(e.target.value)}
-                autoFocus
-              />
-              <div className={styles.deleteConfirmActions}>
-                <button
-                  className={styles.cancelBtn}
-                  onClick={() => {
-                    setShowDeleteConfirm(false)
-                    setDeleteConfirmText('')
-                    setError('')
-                  }}
-                  disabled={deleting}
-                >
-                  Cancel
-                </button>
-                <button
-                  className={styles.confirmDeleteBtn}
-                  onClick={handleDeleteAccount}
-                  disabled={deleteConfirmText !== 'DELETE' || deleting}
-                >
-                  {deleting ? 'Deleting...' : 'Permanently Delete'}
-                </button>
-              </div>
-            </div>
-          )}
+          <button className={styles.dangerBtn} onClick={() => setShowDeleteConfirm(true)}>
+            Delete Account Permanently
+          </button>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className={styles.overlay} onClick={e => e.target === e.currentTarget && setShowDeleteConfirm(false)}>
+          <div className={styles.deleteModal}>
+            <div className={styles.modalTitle}>Delete Account</div>
+            {error && <div className={styles.deleteError}>{error}</div>}
+            <p className={styles.deleteConfirmText}>
+              This will permanently delete your entire business account, all customers, messages, campaigns, and settings. <strong>This cannot be undone.</strong>
+            </p>
+            <p className={styles.deleteConfirmLabel}>Type <strong>DELETE</strong> to confirm:</p>
+            <input
+              className={styles.deleteConfirmInput}
+              type="text"
+              placeholder="Type DELETE"
+              value={deleteConfirmText}
+              onChange={e => setDeleteConfirmText(e.target.value)}
+              autoFocus
+            />
+            <div className={styles.deleteConfirmActions}>
+              <button
+                className={styles.cancelBtn}
+                onClick={() => {
+                  setShowDeleteConfirm(false)
+                  setDeleteConfirmText('')
+                  setError('')
+                }}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                className={styles.confirmDeleteBtn}
+                onClick={handleDeleteAccount}
+                disabled={deleteConfirmText !== 'DELETE' || deleting}
+              >
+                {deleting ? 'Deleting...' : 'Permanently Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </motion.div>
   )
 }
