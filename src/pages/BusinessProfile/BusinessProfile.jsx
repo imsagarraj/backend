@@ -261,12 +261,6 @@ export default function BusinessProfile() {
           {saving ? 'Saving...' : 'Save Changes'}
         </button>
       </div>
-
-      <div className={styles.dangerZone}>
-        <div className={styles.dangerTitle}>Danger Zone</div>
-        <div className={styles.dangerText}>This will permanently delete all your data. This action cannot be undone.</div>
-        <button className={styles.dangerBtn}>Delete Business Account</button>
-      </div>
     </motion.div>
   )
 }

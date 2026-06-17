@@ -87,3 +87,28 @@ def get_business_profile(user: AuthUser = Depends(get_current_user)):
     if not result.data:
         raise HTTPException(status_code=404, detail="Business profile not found")
     return result.data[0]
+
+
+@router.delete("/business-profile")
+def delete_business_account(user: AuthUser = Depends(get_current_user)):
+    supabase = get_supabase()
+
+    biz = supabase.table('business_profiles').select('id').eq('user_id', user.id).execute()
+    if not biz.data:
+        raise HTTPException(status_code=404, detail="Business profile not found")
+
+    biz_id = biz.data[0]['id']
+
+    customer_ids = [c['id'] for c in supabase.table('customers').select('id').eq('business_id', biz_id).execute().data]
+
+    supabase.table('message_queue').delete().eq('business_id', biz_id).execute()
+
+    for cid in customer_ids:
+        supabase.table('conversation_history').delete().eq('customer_id', cid).execute()
+        supabase.table('messages').delete().eq('customer_id', cid).execute()
+
+    supabase.table('campaigns').delete().eq('business_id', biz_id).execute()
+    supabase.table('customers').delete().eq('business_id', biz_id).execute()
+    supabase.table('business_profiles').delete().eq('id', biz_id).execute()
+
+    return {"status": "deleted"}

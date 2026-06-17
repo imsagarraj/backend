@@ -75,6 +75,12 @@ export function updateBusinessProfile(data) {
   })
 }
 
+export function deleteBusinessAccount() {
+  return request('/business-profile', {
+    method: 'DELETE',
+  })
+}
+
 export function listCampaigns() {
   return request('/campaigns')
 }

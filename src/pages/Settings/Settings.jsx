@@ -1,5 +1,8 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
+import { deleteBusinessAccount } from '../../lib/api'
 import styles from './Settings.module.css'
 
 const integrations = [
@@ -11,6 +14,8 @@ const integrations = [
 ]
 
 export default function Settings() {
+  const navigate = useNavigate()
+  const { signOut } = useAuth()
   const [notifPrefs, setNotifPrefs] = useState({
     customerReply: true,
     dailySummary: true,
@@ -18,9 +23,27 @@ export default function Settings() {
     failedAlert: true,
     billingReminders: true,
   })
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [error, setError] = useState('')
 
   const toggleNotif = key => {
     setNotifPrefs(prev => ({ ...prev, [key]: !prev[key] }))
+  }
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== 'DELETE') return
+    setDeleting(true)
+    setError('')
+    try {
+      await deleteBusinessAccount()
+      await signOut()
+      navigate('/login')
+    } catch (err) {
+      setError(err.message)
+      setDeleting(false)
+    }
   }
 
   return (
@@ -142,10 +165,48 @@ export default function Settings() {
         <div className={styles.dangerZone}>
           <div className={styles.dangerTitle}>Danger Zone</div>
           <div className={styles.dangerText}>These actions are irreversible. Please proceed with caution.</div>
-          <div className={styles.dangerActions}>
-            <button className={`${styles.dangerBtn} ${styles.dangerBtnFilled}`}>Deactivate Account</button>
-            <button className={styles.dangerBtn}>Delete Account Permanently</button>
-          </div>
+
+          {!showDeleteConfirm ? (
+            <button className={styles.dangerBtn} onClick={() => setShowDeleteConfirm(true)}>
+              Delete Account Permanently
+            </button>
+          ) : (
+            <div className={styles.deleteConfirm}>
+              {error && <div className={styles.deleteError}>{error}</div>}
+              <p className={styles.deleteConfirmText}>
+                This will permanently delete your entire business account, all customers, messages, campaigns, and settings. <strong>This cannot be undone.</strong>
+              </p>
+              <p className={styles.deleteConfirmLabel}>Type <strong>DELETE</strong> to confirm:</p>
+              <input
+                className={styles.deleteConfirmInput}
+                type="text"
+                placeholder="Type DELETE"
+                value={deleteConfirmText}
+                onChange={e => setDeleteConfirmText(e.target.value)}
+                autoFocus
+              />
+              <div className={styles.deleteConfirmActions}>
+                <button
+                  className={styles.cancelBtn}
+                  onClick={() => {
+                    setShowDeleteConfirm(false)
+                    setDeleteConfirmText('')
+                    setError('')
+                  }}
+                  disabled={deleting}
+                >
+                  Cancel
+                </button>
+                <button
+                  className={styles.confirmDeleteBtn}
+                  onClick={handleDeleteAccount}
+                  disabled={deleteConfirmText !== 'DELETE' || deleting}
+                >
+                  {deleting ? 'Deleting...' : 'Permanently Delete'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </motion.div>
