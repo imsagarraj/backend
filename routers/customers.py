@@ -100,12 +100,15 @@ def send_welcome_message(customer: dict, biz_id: int) -> dict:
             'last_contact': datetime.now(timezone.utc).isoformat(),
         }).eq('id', customer['id']).execute()
 
+        today_date = datetime.now(timezone.utc).strftime('%d %b %Y')
         initial_history = supabase.table('conversation_history').select('*').eq(
             'customer_id', customer['id']
         ).order('timestamp').execute()
         extracted = extract_notes_from_conversation(customer, business, initial_history.data)
         if extracted:
-            supabase.table('customers').update({'notes': extracted}).eq('id', customer['id']).execute()
+            supabase.table('customers').update({
+                'notes': f"--- {today_date} ---\n{extracted}"
+            }).eq('id', customer['id']).execute()
 
         return {"status": "sent", "message_id": send_result.get('message_id')}
     except Exception as e:

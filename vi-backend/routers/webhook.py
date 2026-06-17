@@ -147,18 +147,28 @@ async def handle_incoming_message(phone, message_text, message_id, pn_id=''):
             'content': reply,
         }).execute()
 
-        full_history = supabase.table('conversation_history').select('*').eq(
+        today_date = datetime.now(timezone.utc).strftime('%d %b %Y')
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+
+        today_history = supabase.table('conversation_history').select('*').eq(
             'customer_id', customer['id']
-        ).order('timestamp').execute()
+        ).gte('timestamp', today_start.isoformat()).order('timestamp').execute()
 
-        latest_notes = supabase.table('customers').select('notes').eq('id', customer['id']).execute()
-        existing_notes = (latest_notes.data[0].get('notes') or '').strip() if latest_notes.data else None
-
-        extracted = extract_notes_from_conversation(customer, business, full_history.data, existing_notes)  # noqa: F821
+        extracted = extract_notes_from_conversation(customer, business, today_history.data)
         if extracted:
-            supabase.table('customers').update({
-                'notes': extracted
-            }).eq('id', customer['id']).execute()
+            day_entry = f"--- {today_date} ---\n{extracted}"
+            latest_notes = supabase.table('customers').select('notes').eq('id', customer['id']).execute()
+            existing = (latest_notes.data[0].get('notes') or '').strip() if latest_notes.data else ''
+
+            if f'--- {today_date} ---' in existing:
+                parts = existing.split(f'--- {today_date} ---')
+                before = parts[0]
+                after = parts[1].split('---', 1)
+                new_notes = before + day_entry + ('\n' + '---' + after[1] if len(after) > 1 else '')
+            else:
+                new_notes = existing + ('\n\n' if existing else '') + day_entry
+
+            supabase.table('customers').update({'notes': new_notes.strip()}).eq('id', customer['id']).execute()
 
     except Exception as e:
         logger.error(f"Error handling incoming message: {e}")

@@ -351,18 +351,30 @@ export default function CustomerProfile() {
             {tab === 'notes' && (
               <div>
                 <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginBottom: 12 }}>
-                  Clinical notes extracted from conversations. Auto-updated after each customer reply.
+                  Daily conversation summaries. Each day has its own notes.
                 </p>
                 {customer.notes ? (
                   <div className={styles.notesDisplay}>
-                    {customer.notes.split('\n').map((line, i) => {
-                      if (line.startsWith('===')) {
-                        return <p key={i} className={styles.notesSection}>{line.replace(/===/g, '').trim()}</p>
-                      }
-                      if (line.trim().startsWith('-')) {
-                        return <p key={i} className={styles.notesBullet}>{line}</p>
-                      }
-                      return <p key={i} className={styles.notesLine}>{line}</p>
+                    {customer.notes.split(/(?=--- \d+ \w+ \d+ ---)/).filter(Boolean).map((dayBlock, idx) => {
+                      const lines = dayBlock.trim().split('\n')
+                      const header = lines[0]
+                      const body = lines.slice(1).join('\n')
+                      return (
+                        <div key={idx}>
+                          <p className={styles.notesDay}>{header.replace(/---/g, '').trim()}</p>
+                          <div className={styles.notesDayBody}>
+                            {body.split('\n').map((line, i) => {
+                              if (line.startsWith('===')) {
+                                return <p key={i} className={styles.notesSection}>{line.replace(/===/g, '').trim()}</p>
+                              }
+                              if (line.trim().startsWith('-')) {
+                                return <p key={i} className={styles.notesBullet}>{line}</p>
+                              }
+                              return <p key={i} className={styles.notesLine}>{line}</p>
+                            })}
+                          </div>
+                        </div>
+                      )
                     })}
                   </div>
                 ) : (

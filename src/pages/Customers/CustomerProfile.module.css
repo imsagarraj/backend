@@ -325,8 +325,27 @@
   letter-spacing: 0.5px;
 }
 
-.notesSection:first-of-type {
+.notesDayBody .notesSection:first-child {
   margin-top: 0;
+}
+
+.notesDay {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-accent);
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.notesDay:not(:first-child) {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.notesDayBody {
+  padding-left: 0;
 }
 
 .notesBullet {
