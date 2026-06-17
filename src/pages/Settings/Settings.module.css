@@ -220,33 +220,6 @@
   opacity: 0.9;
 }
 
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 20px;
-}
-
-.deleteModal {
-  background: var(--color-bg-card);
-  border-radius: var(--radius-xl);
-  padding: 28px;
-  width: 100%;
-  max-width: 440px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-}
-
-.modalTitle {
-  font-size: 1.125rem;
-  font-weight: 700;
-  margin-bottom: 12px;
-  color: var(--color-error);
-}
-
 .deleteConfirm {
   margin-top: 12px;
 }

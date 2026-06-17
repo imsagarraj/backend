@@ -337,33 +337,38 @@ def extract_notes_from_conversation(customer, business, conversation_history):
     )
     product = customer.get('product_purchased') or customer.get('product', '')
 
-    prompt = f"""You are a note-taking assistant for {business.get('business_name', 'the business')}, a {business.get('business_type', 'business')}.
+    prompt = f"""You are a clinical note-taking assistant for {business.get('business_name', 'the business')}, a {business.get('business_type', 'business')}.
 
 Customer: {customer.get('name', 'Unknown')}
 Product/Service: {product}
 
-Read the FULL conversation below. Extract key points as SHORT, scannable entries using these exact labels:
+Read the FULL conversation below and produce a clean, doctor-friendly clinical note in this format:
 
-PROBLEM: <exact quote from customer> — <brief clarification if needed>
-FEEDBACK: <exact quote from customer> — <context>
-STATUS: <one-line summary of how customer is feeling>
-APPOINTMENT: <appointment details if any>
+=== Symptoms & Complaints ===
+Bullet points only. What hurts, where, how bad (scale 1-10), type of pain (sharp/dull/throbbing), duration, triggers. If nothing shared: skip section.
 
-Rules:
-- PROBLEM and FEEDBACK MUST use the customer's EXACT words in quotes.
-- Each entry is ONE short line. Max 15 words per entry.
-- Skip labels that have no data. Only include what was actually discussed.
-- No paragraphs. No greetings. No explanation.
-- Use each label (PROBLEM / FEEDBACK / STATUS / APPOINTMENT) at most once. Pick the single most important point for each.
+=== Current Status ===
+One line summarizing how the patient is feeling NOW. Exact words if relevant.
+If nothing shared: skip section.
 
-Example output:
-PROBLEM: Customer said "My tooth has been hurting for 3 days" — throbbing pain when eating
-FEEDBACK: Customer said "The cleaning was gentle, I liked it" — no complaints about staff
-STATUS: Feeling better after medication, discomfort comes and goes
-APPOINTMENT: Follow-up booked for 20 June at 10:00 AM
+=== Key Feedback ===
+Brief notes on what the customer said about the treatment/product. Include direct quotes in "quotes".
+If nothing shared: skip section.
+
+=== Appointments ===
+Any booked follow-ups, reschedules, or preferences.
+If nothing shared: skip section.
 
 Full Conversation:
-{history_text}"""
+{history_text}
+
+IMPORTANT:
+- ONLY include sections that have actual data. Skip empty sections entirely.
+- Be BRIEF. A doctor should read this in 10 seconds.
+- Use bullet points (-), not numbers.
+- No markdown formatting other than simple bullet points.
+- No greetings, no explanations, no labels like "Here is the summary".
+- Just output the sections with data. Nothing else."""
 
     messages = [
         {"role": "system", "content": prompt},
