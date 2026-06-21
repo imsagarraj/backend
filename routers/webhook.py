@@ -53,6 +53,12 @@ async def receive_webhook(request: Request):
                         message_text = msg.get('text', {}).get('body', '')
                         message_id = msg.get('id', '')
                         await handle_incoming_message(phone, message_text, message_id, pn_id)
+                    elif msg.get('type') == 'reaction':
+                        phone = msg.get('from', '')
+                        emoji = msg.get('reaction', {}).get('emoji', '')
+                        message_id = msg.get('id', '')
+                        if emoji:
+                            await handle_incoming_message(phone, f"reacted with {emoji}", message_id, pn_id)
     except Exception as e:
         logger.error(f"Error processing webhook: {e}")
 
