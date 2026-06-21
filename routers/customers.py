@@ -65,7 +65,7 @@ def send_welcome_message(customer: dict, biz_id: int) -> dict:
 
         send_template_message(
             customer['phone'],
-            'hello_world',
+            'welcome_trigger',
             [],
             phone_number_id=pn_id,
             language='en_US',
