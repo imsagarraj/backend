@@ -19,9 +19,16 @@ function toIST(ts) {
   })
 }
 
+function stageDisplay(c) {
+  if (c.status === 'completed' || c.current_sequence_day >= 30) return 'Done'
+  if (c.current_sequence_day > 0 && c.current_sequence_day <= 5) return `Touch ${c.current_sequence_day}/5`
+  return c.stage || 'Active'
+}
+
 const stageColors = {
-  'Day 1': 'stageDay1', 'Day 3': 'stageDay3', 'Day 15': 'stageDay15',
-  'Day 30': 'stageDay30', 'Done': 'stageDone',
+  'Touch 1/5': 'stageDay1', 'Touch 2/5': 'stageDay3',
+  'Touch 3/5': 'stageDay15', 'Touch 4/5': 'stageDay30',
+  'Touch 5/5': 'stageDone', 'Done': 'stageDone',
 }
 
 const statusColors = {
@@ -106,7 +113,7 @@ export default function Customers() {
         c.product.toLowerCase().includes(s)
       )
     }
-    if (filters.stage) result = result.filter(c => c.stage === filters.stage)
+    if (filters.stage) result = result.filter(c => stageDisplay(c) === filters.stage)
     if (filters.status) result = result.filter(c => c.status === filters.status)
     if (filters.product) result = result.filter(c => c.product.toLowerCase().includes(filters.product.toLowerCase()))
     return result
@@ -146,7 +153,7 @@ export default function Customers() {
         order_id: form.orderId.trim() || null,
         notes: form.notes.trim() || null,
         start_sequence: form.startSequence,
-        stage: 'Day 1',
+        stage: 'Active',
         status: 'active',
       })
       setShowAddModal(false)
@@ -208,10 +215,11 @@ export default function Customers() {
             <label className={styles.filterLabel}>Follow-up Stage</label>
             <select className={styles.filterSelect} value={filters.stage} onChange={e => setFilters(f => ({ ...f, stage: e.target.value }))}>
               <option value="">All</option>
-              <option>Day 1</option>
-              <option>Day 3</option>
-              <option>Day 15</option>
-              <option>Day 30</option>
+              <option>Touch 1/5</option>
+              <option>Touch 2/5</option>
+              <option>Touch 3/5</option>
+              <option>Touch 4/5</option>
+              <option>Touch 5/5</option>
               <option>Done</option>
             </select>
           </div>
@@ -298,7 +306,7 @@ export default function Customers() {
                   <td>{c.product}</td>
                   <td style={{ color: 'var(--color-text-secondary)' }}>{c.purchase_date || c.purchaseDate}</td>
                   <td style={{ color: 'var(--color-success)', fontSize: '0.75rem', fontWeight: 600 }}>{toIST(c.next_booking)}</td>
-                  <td><span className={`${styles.stageBadge} ${styles[stageColors[c.stage]]}`}>{c.stage}</span></td>
+                  <td><span className={`${styles.stageBadge} ${styles[stageColors[stageDisplay(c)]] || styles.stageDone}`}>{stageDisplay(c)}</span></td>
                   <td style={{ color: 'var(--color-text-secondary)', fontSize: '0.75rem' }}>{toIST(c.last_contact || c.lastContact)}</td>
                   <td><span className={`${styles.statusBadge} ${styles[statusColors[c.status]]}`}>{c.status}</span></td>
                   <td>

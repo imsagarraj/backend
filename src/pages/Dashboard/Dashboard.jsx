@@ -138,11 +138,12 @@ export default function Dashboard() {
                   <div className={styles.scheduleInfo}>
                     <span className={styles.scheduleCustomer}>{item.name}</span>
                     <span className={`${styles.schedulePill} ${
-                      item.sequence_day <= 1 ? styles.pillDay1 :
-                      item.sequence_day <= 3 ? styles.pillDay3 :
-                      item.sequence_day <= 15 ? styles.pillDay15 :
-                      styles.pillDay30
-                    }`}>Day {item.sequence_day}</span>
+                      item.sequence_day === 1 ? styles.pillDay1 :
+                      item.sequence_day === 2 ? styles.pillDay3 :
+                      item.sequence_day === 3 ? styles.pillDay15 :
+                      item.sequence_day === 4 ? styles.pillDay30 :
+                      styles.pillCustom
+                    }`}>Touch {item.sequence_day}/5</span>
                   </div>
                   <span className={styles.statusScheduled}>Scheduled</span>
                 </div>

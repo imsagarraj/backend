@@ -30,7 +30,7 @@ export default function RightSidebar() {
         id: s.customer_id,
         time: 'Today',
         customer: s.name,
-        type: `Day ${s.sequence_day}`,
+        type: `Touch ${s.sequence_day}/5`,
         status: 'Scheduled',
       }))
     }
@@ -96,10 +96,10 @@ export default function RightSidebar() {
                   <div className={styles.scheduleInfo}>
                     <span className={styles.scheduleCustomer}>{item.customer}</span>
                     <span className={`${styles.scheduleType} ${
-                      item.type === 'Day 1' ? styles.typeDay1 :
-                      item.type === 'Day 3' ? styles.typeDay3 :
-                      item.type === 'Day 15' ? styles.typeDay15 :
-                      item.type === 'Day 30' ? styles.typeDay30 :
+                      item.type === 'Touch 1/5' ? styles.typeDay1 :
+                      item.type === 'Touch 2/5' ? styles.typeDay3 :
+                      item.type === 'Touch 3/5' ? styles.typeDay15 :
+                      item.type === 'Touch 4/5' ? styles.typeDay30 :
                       styles.typeCustom
                     }`}>{item.type}</span>
                   </div>
