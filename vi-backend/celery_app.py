@@ -38,7 +38,7 @@ celery_app.conf.beat_schedule = {
     },
     'smart-timing': {
         'task': 'tasks.message_tasks.process_smart_timing',
-        'schedule': crontab(hour=6, minute=0),
+        'schedule': crontab(hour='*/4', minute=0),
     },
 }
 

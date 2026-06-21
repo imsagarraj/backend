@@ -7,6 +7,8 @@ from services.scheduler_service import (
 )
 from services.followup_service import get_due_followups
 from datetime import datetime, timedelta, timezone
+from collections import Counter
+import random
 import logging
 
 logger = logging.getLogger(__name__)
@@ -86,44 +88,71 @@ def retry_failed_pipeline():
 def process_smart_timing():
     supabase = get_supabase()
     try:
+        now_ist = datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)
+        week_ago = (now_ist - timedelta(days=7)).isoformat()
+
         customers = supabase.table('customers').select('*').gte(
             'response_count', 3
         ).eq('status', 'active').execute()
 
+        updated = 0
         for customer in customers.data:
             msgs = supabase.table('messages').select('timestamp').eq(
                 'customer_id', customer['id']
-            ).eq('direction', 'received').order('timestamp').execute()
+            ).eq('direction', 'received').execute()
 
-            if len(msgs.data) >= 3:
-                hours = []
-                for m in msgs.data:
-                    if m.get('timestamp'):
-                        ts = m['timestamp']
-                        if isinstance(ts, str):
-                            ts = datetime.fromisoformat(ts.replace('Z', '+00:00'))
-                        hours.append(ts.hour)
-                if hours:
-                    avg_hour = round(sum(hours) / len(hours))
-                    supabase.table('customers').update({
-                        'best_contact_time': f"{avg_hour:02d}:00"
-                    }).eq('id', customer['id']).execute()
+            if len(msgs.data) < 3:
+                continue
 
-        logger.info(f"Smart timing updated for {len(customers.data)} customers")
+            recent = []
+            older = []
+            for m in msgs.data:
+                if m.get('timestamp'):
+                    ts = m['timestamp']
+                    if isinstance(ts, str):
+                        ts = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+                    ts_ist = ts + timedelta(hours=5, minutes=30)
+                    hour = ts_ist.hour
+                    if ts.isoformat() >= week_ago:
+                        recent.append(hour)
+                    else:
+                        older.append(hour)
+
+            all_hours = recent + older
+            if not all_hours:
+                continue
+
+            if recent:
+                weights = [3] * len(recent) + [1] * len(older)
+                weighted = []
+                for h, w in zip(all_hours, weights):
+                    weighted.extend([h] * w)
+                best_hour = Counter(weighted).most_common(1)[0][0]
+            else:
+                best_hour = Counter(all_hours).most_common(1)[0][0]
+
+            supabase.table('customers').update({
+                'best_contact_time': f"{best_hour:02d}:00"
+            }).eq('id', customer['id']).execute()
+            updated += 1
+
+        logger.info(f"Smart timing updated for {updated} customers")
     except Exception as e:
         logger.error(f"Smart timing error: {e}")
 
 
 def _get_optimal_time(customer):
-    now = datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)
-    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    now_ist = datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)
+    today_ist = now_ist.replace(hour=0, minute=0, second=0, microsecond=0)
 
     bct = customer.get('best_contact_time')
     if bct:
         try:
-            hour, minute = bct.split(':')
-            return (today.replace(hour=int(hour), minute=int(minute)) - timedelta(hours=5, minutes=30)).isoformat()
+            hour, _ = bct.split(':')
+            minute = random.randint(0, 59)
+            return (today_ist.replace(hour=int(hour), minute=minute) - timedelta(hours=5, minutes=30)).isoformat()
         except (ValueError, TypeError):
             pass
 
-    return (today.replace(hour=10, minute=0) - timedelta(hours=5, minutes=30)).isoformat()
+    minute = random.randint(0, 59)
+    return (today_ist.replace(hour=10, minute=minute) - timedelta(hours=5, minutes=30)).isoformat()
