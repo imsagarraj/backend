@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS admin_users (
 ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;
 
 -- Only allow service_role key (backend) to access admin_users
-CREATE POLICY "Admin users service role only"
+CREATE POLICY IF NOT EXISTS "Admin users service role only"
   ON admin_users
   USING (true);
 
@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS customers (
 
 ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can manage their own customers"
+CREATE POLICY IF NOT EXISTS "Users can manage their own customers"
   ON customers
   USING (auth.uid() = user_id);
 
@@ -101,6 +101,6 @@ CREATE TABLE IF NOT EXISTS business_profiles (
 
 ALTER TABLE business_profiles ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can manage their own business profile"
+CREATE POLICY IF NOT EXISTS "Users can manage their own business profile"
   ON business_profiles
   USING (auth.uid() = user_id);
