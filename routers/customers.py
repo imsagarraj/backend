@@ -91,7 +91,7 @@ def send_welcome_message(customer: dict, biz_id: int) -> dict:
             'content': welcome_text,
             'status': 'sent',
             'meta_message_id': send_result.get('message_id'),
-            'sequence_day': 0,
+            'sequence_day': 1,
         }).execute()
 
         try:
@@ -104,7 +104,7 @@ def send_welcome_message(customer: dict, biz_id: int) -> dict:
             pass
 
         supabase.table('customers').update({
-            'current_sequence_day': 0,
+            'current_sequence_day': 1,
             'last_contact': datetime.now(timezone.utc).isoformat(),
         }).eq('id', customer['id']).execute()
 
