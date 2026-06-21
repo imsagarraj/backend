@@ -5,10 +5,25 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-TOUCH_COUNT = 5
+TOUCH_COUNT = 4
 
 
-def generate_followup_sequence(customer, business, agent):
+def insert_welcome_touch(customer, business):
+    supabase = get_supabase()
+    today = date.today()
+    row = {
+        'customer_id': customer['id'],
+        'business_id': business['id'],
+        'touch_number': 1,
+        'scheduled_date': today.isoformat(),
+        'status': 'completed',
+        'completed_at': datetime.now(timezone.utc).isoformat(),
+    }
+    result = supabase.table('follow_up_sequences').insert(row).execute()
+    return result.data[0] if result.data else None
+
+
+def generate_followup_sequence(customer, business, agent, start_touch=1):
     supabase = get_supabase()
     purchase_date = customer.get('purchase_date')
     if not purchase_date:
@@ -21,7 +36,7 @@ def generate_followup_sequence(customer, business, agent):
 
     existing = supabase.table('follow_up_sequences').select('id').eq(
         'customer_id', customer['id']
-    ).execute()
+    ).eq('status', 'pending').execute()
     if existing.data:
         return existing.data
 
@@ -43,7 +58,7 @@ def generate_followup_sequence(customer, business, agent):
         rows.append({
             'customer_id': customer['id'],
             'business_id': business['id'],
-            'touch_number': i + 1,
+            'touch_number': start_touch + i,
             'scheduled_date': sched_date.isoformat(),
             'status': 'pending',
         })
