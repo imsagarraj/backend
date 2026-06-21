@@ -7,7 +7,7 @@ WEB_PID=$!
 
 # Start celery only if REDIS_URL is configured
 if [ -n "$REDIS_URL" ]; then
-    celery -A celery_app worker --loglevel=info --concurrency=1 --max-tasks-per-child=10 &
+    celery -A celery_app worker --loglevel=info --concurrency=4 --max-tasks-per-child=10 &
     CELERY_PID=$!
     celery -A celery_app beat --loglevel=info --pidfile=/tmp/celerybeat.pid &
     BEAT_PID=$!

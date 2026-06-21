@@ -9,6 +9,7 @@ from services.whatsapp_service import send_text_message
 from services.deepseek_service import generate_followup_message, generate_appointment_message
 from database.seed import get_active_agent
 from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 
 logger = logging.getLogger(__name__)
@@ -59,72 +60,87 @@ def advance(queue_id, next_stage, updates=None):
     supabase.table('message_queue').update(payload).eq('id', queue_id).execute()
 
 
+def _send_item(item):
+    supabase = get_supabase()
+    try:
+        advance(item['id'], 'sending')
+        phone = item['payload'].get('customer_phone', '')
+        text = item.get('ai_generated_text', '')
+
+        pn_id = None
+        if item.get('business_id'):
+            bp = supabase.table('business_profiles').select('meta_phone_number_id').eq('id', item['business_id']).execute()
+            if bp.data and bp.data[0].get('meta_phone_number_id'):
+                pn_id = bp.data[0]['meta_phone_number_id']
+
+        result = send_text_message(phone, text, phone_number_id=pn_id)
+        if result.get('status') == 'success':
+            advance(item['id'], 'sent', {
+                'meta_message_id': result.get('message_id', ''),
+                'sent_at': datetime.now(timezone.utc).isoformat(),
+            })
+            _update_customer_after_send(item)
+        else:
+            _handle_failure(item, result.get('error', 'WhatsApp send failed'))
+    except Exception as e:
+        _handle_failure(item, str(e))
+    return 1
+
+
+def _generate_ai_text(item):
+    supabase = get_supabase()
+    try:
+        customer_data = supabase.table('customers').select('*').eq('id', item['customer_id']).execute()
+        biz_data = supabase.table('business_profiles').select('*').eq('id', item['business_id']).execute()
+        agent = get_active_agent(item['business_id'])
+
+        if not customer_data.data or not biz_data.data or not agent:
+            _handle_failure(item, 'Missing customer/business/agent')
+            return 0
+
+        customer = customer_data.data[0]
+        business = biz_data.data[0]
+
+        if item['message_type'] == 'sequence':
+            text = generate_followup_message(customer, business, agent, item['sequence_day'])
+        elif item['message_type'] in ('appointment_reminder', 'appointment_followup'):
+            sub_type = 'reminder' if item['message_type'] == 'appointment_reminder' else 'followup'
+            text = generate_appointment_message(customer, business, agent, sub_type)
+        else:
+            _handle_failure(item, f'Unknown message_type: {item["message_type"]}')
+            return 0
+
+        advance(item['id'], 'ready_to_send', {'ai_generated_text': text})
+        return 1
+    except Exception as e:
+        _handle_failure(item, str(e))
+        return 0
+
+
 def process_batch(batch_size=20):
     supabase = get_supabase()
     now = datetime.now(timezone.utc).isoformat()
     processed = 0
 
-    # 1. Process items ready to send (have AI-generated text)
     ready_items = supabase.table('message_queue').select('*').eq(
         'stage', 'ready_to_send'
     ).lte('scheduled_at', now).limit(batch_size).execute()
 
-    for item in ready_items.data:
-        try:
-            advance(item['id'], 'sending')
-            phone = item['payload'].get('customer_phone', '')
-            text = item.get('ai_generated_text', '')
+    if ready_items.data:
+        with ThreadPoolExecutor(max_workers=10) as pool:
+            futures = [pool.submit(_send_item, item) for item in ready_items.data]
+            for f in as_completed(futures):
+                processed += f.result()
 
-            pn_id = None
-            if item.get('business_id'):
-                bp = supabase.table('business_profiles').select('meta_phone_number_id').eq('id', item['business_id']).execute()
-                if bp.data and bp.data[0].get('meta_phone_number_id'):
-                    pn_id = bp.data[0]['meta_phone_number_id']
-
-            result = send_text_message(phone, text, phone_number_id=pn_id)
-            if result.get('status') == 'success':
-                advance(item['id'], 'sent', {
-                    'meta_message_id': result.get('message_id', ''),
-                    'sent_at': datetime.now(timezone.utc).isoformat(),
-                })
-                _update_customer_after_send(item)
-            else:
-                _handle_failure(item, result.get('error', 'WhatsApp send failed'))
-        except Exception as e:
-            _handle_failure(item, str(e))
-        processed += 1
-
-    # 2. Process items needing AI generation
     ai_items = supabase.table('message_queue').select('*').eq(
         'stage', 'pending_ai_gen'
     ).limit(batch_size).execute()
 
-    for item in ai_items.data:
-        try:
-            customer_data = supabase.table('customers').select('*').eq('id', item['customer_id']).execute()
-            biz_data = supabase.table('business_profiles').select('*').eq('id', item['business_id']).execute()
-            agent = get_active_agent(item['business_id'])
-
-            if not customer_data.data or not biz_data.data or not agent:
-                _handle_failure(item, 'Missing customer/business/agent')
-                continue
-
-            customer = customer_data.data[0]
-            business = biz_data.data[0]
-
-            if item['message_type'] == 'sequence':
-                text = generate_followup_message(customer, business, agent, item['sequence_day'])
-            elif item['message_type'] in ('appointment_reminder', 'appointment_followup'):
-                sub_type = 'reminder' if item['message_type'] == 'appointment_reminder' else 'followup'
-                text = generate_appointment_message(customer, business, agent, sub_type)
-            else:
-                _handle_failure(item, f'Unknown message_type: {item["message_type"]}')
-                continue
-
-            advance(item['id'], 'ready_to_send', {'ai_generated_text': text})
-        except Exception as e:
-            _handle_failure(item, str(e))
-        processed += 1
+    if ai_items.data:
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            futures = [pool.submit(_generate_ai_text, item) for item in ai_items.data]
+            for f in as_completed(futures):
+                processed += f.result()
 
     return processed
 
