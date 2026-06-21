@@ -76,12 +76,11 @@ def send_welcome_message(customer: dict, biz_id: int) -> dict:
         try:
             welcome_text = generate_followup_message(customer, business, agent, 0)
         except Exception as e:
-            fallback = f"Hi {customer.get('name', 'there')}! 👋 Welcome to {business.get('business_name', 'us')}. We're so glad you chose us. How are you finding your {customer.get('product', 'purchase')} so far? 😊"
-            logger.warning(f"Gemini failed, using fallback: {e}")
-            welcome_text = fallback
+            logger.warning(f"AI generation failed: {e}")
+            welcome_text = None
 
         if not welcome_text:
-            return {"status": "skipped", "reason": "Could not generate welcome text"}
+            welcome_text = f"Hi {customer.get('name', 'there')}! 👋 Welcome to {business.get('business_name', 'us')}. We're so glad you chose us. How are you finding your {customer.get('product', 'purchase')} so far? 😊"
 
         send_result = send_text_message(customer['phone'], welcome_text, phone_number_id=pn_id)
         if send_result.get('status') != 'success':
