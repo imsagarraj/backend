@@ -15,7 +15,7 @@ def process_scheduled_campaigns():
     due = supabase.table('campaigns').select('*').eq(
         'status', 'draft'
     ).eq(
-        'schedule_type', 'scheduled'
+        'schedule_type', 'later'
     ).lte(
         'scheduled_at', now
     ).execute()
