@@ -2,7 +2,7 @@ import { useState, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useApp } from '../../context/AppContext'
-import { importCustomersCSV } from '../../lib/api'
+import { importCustomersCSV, sendMessage } from '../../lib/api'
 import styles from './Customers.module.css'
 
 function getInitials(name) {
@@ -282,7 +282,7 @@ const emptyForm = {
 
 export default function Customers() {
   const navigate = useNavigate()
-  const { customers, addCustomer } = useApp()
+  const { customers, addCustomer, deleteCustomer, updateCustomer } = useApp()
   const [search, setSearch] = useState('')
   const [showFilters, setShowFilters] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
@@ -292,6 +292,7 @@ export default function Customers() {
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false)
   const fileInputRef = useRef(null)
 
   const handleExport = () => {
@@ -327,6 +328,66 @@ export default function Customers() {
       alert('Import failed: ' + err.message)
     }
     e.target.value = ''
+  }
+
+  const [broadcastText, setBroadcastText] = useState('')
+  const [sendingBroadcast, setSendingBroadcast] = useState(false)
+
+  const handleBulkDelete = async () => {
+    if (!window.confirm(`Delete ${selected.length} customer(s)? This cannot be undone.`)) return
+    for (const id of selected) {
+      await deleteCustomer(id)
+    }
+    setSelected([])
+  }
+
+  const handleBulkPause = async () => {
+    for (const id of selected) {
+      await updateCustomer(id, { status: 'paused' })
+    }
+    setSelected([])
+  }
+
+  const handleBulkExport = () => {
+    const headers = ['name', 'phone', 'email', 'gender', 'product', 'purchase_date', 'order_value', 'order_id', 'notes', 'status', 'stage']
+    const target = customers.filter(c => selected.includes(c.id))
+    const rows = target.map(c => headers.map(h => {
+      const val = c[h] ?? ''
+      const str = String(val)
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`
+      }
+      return str
+    }).join(','))
+    const bom = '\uFEFF'
+    const csv = bom + headers.join(',') + '\n' + rows.join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'customers_selected.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const handleBulkBroadcast = async () => {
+    if (!broadcastText.trim()) return
+    setSendingBroadcast(true)
+    try {
+      for (const id of selected) {
+        await sendMessage(id, broadcastText.trim())
+      }
+      setBroadcastText('')
+      setShowBroadcastModal(false)
+      setSelected([])
+      alert(`Message sent to ${selected.length} customer(s)`)
+    } catch (err) {
+      alert('Broadcast failed: ' + err.message)
+    } finally {
+      setSendingBroadcast(false)
+    }
   }
 
   const filtered = useMemo(() => {
@@ -496,10 +557,10 @@ export default function Customers() {
             <div className={styles.bulkBar}>
               <span>{selected.length} selected</span>
               <div className={styles.bulkActions}>
-                <button className={styles.bulkActionBtn}>Send Broadcast</button>
-                <button className={styles.bulkActionBtn}>Pause Follow-ups</button>
-                <button className={styles.bulkActionBtn}>Delete</button>
-                <button className={styles.bulkActionBtn}>Export</button>
+                <button className={styles.bulkActionBtn} onClick={() => setShowBroadcastModal(true)}>Send Broadcast</button>
+                <button className={styles.bulkActionBtn} onClick={handleBulkPause}>Pause Follow-ups</button>
+                <button className={styles.bulkActionBtn} onClick={handleBulkDelete}>Delete</button>
+                <button className={styles.bulkActionBtn} onClick={handleBulkExport}>Export</button>
               </div>
             </div>
           )}
@@ -638,6 +699,30 @@ export default function Customers() {
               <button className={styles.cancelBtn} onClick={() => { setShowAddModal(false); setForm(emptyForm); setFormError('') }}>Cancel</button>
               <button className={styles.saveBtn} onClick={handleSave} disabled={saving}>
                 {saving ? 'Saving...' : 'Save Customer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Broadcast Modal */}
+      {showBroadcastModal && (
+        <div className={styles.overlay} onClick={e => e.target === e.currentTarget && setShowBroadcastModal(false)}>
+          <div className={styles.modal} style={{ maxWidth: 480 }}>
+            <div className={styles.modalTitle}>Send Broadcast to {selected.length} customer(s)</div>
+            <div style={{ padding: '0 0 16px' }}>
+              <textarea
+                className={styles.modalTextarea}
+                style={{ minHeight: 120 }}
+                placeholder="Type your message here..."
+                value={broadcastText}
+                onChange={e => setBroadcastText(e.target.value)}
+              />
+            </div>
+            <div className={styles.modalActions}>
+              <button className={styles.cancelBtn} onClick={() => { setShowBroadcastModal(false); setBroadcastText('') }}>Cancel</button>
+              <button className={styles.saveBtn} onClick={handleBulkBroadcast} disabled={sendingBroadcast || !broadcastText.trim()}>
+                {sendingBroadcast ? 'Sending...' : `Send to ${selected.length} customer(s)`}
               </button>
             </div>
           </div>
