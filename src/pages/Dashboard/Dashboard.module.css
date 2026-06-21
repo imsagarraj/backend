@@ -31,7 +31,7 @@
   height: 36px;
   border-radius: 10px;
   background: var(--color-accent-light);
-  color: var(--color-accent);
+  color: #000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -93,9 +93,26 @@
   background: var(--color-bg-card);
 }
 
+.activityCard {
+  max-height: 380px;
+  display: flex;
+  flex-direction: column;
+}
+
+.activityCard .activityList {
+  overflow-y: auto;
+  flex: 1;
+}
+
 .scheduleCard {
   max-height: 380px;
+  display: flex;
+  flex-direction: column;
+}
+
+.scheduleCard .scheduleBody {
   overflow-y: auto;
+  flex: 1;
 }
 
 .cardTitle {

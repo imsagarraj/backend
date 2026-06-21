@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Backgro
 from database.supabase_client import get_supabase
 from dependencies import get_current_user, get_user_business_id, AuthUser
 from database.seed import get_active_agent
-from services.whatsapp_service import send_text_message
+from services.whatsapp_service import send_text_message, send_template_message
 from services.deepseek_service import generate_followup_message, extract_notes_from_conversation
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
@@ -61,6 +61,14 @@ def send_welcome_message(customer: dict, biz_id: int) -> dict:
         pn_id = business.get('meta_phone_number_id')
         if not pn_id:
             return {"status": "skipped", "reason": "WhatsApp not configured (no meta_phone_number_id). Save your WhatsApp number in Business Profile first."}
+
+        send_template_message(
+            customer['phone'],
+            'hello_world',
+            [],
+            phone_number_id=pn_id,
+            language='en_US',
+        )
 
         try:
             welcome_text = generate_followup_message(customer, business, agent, 0)

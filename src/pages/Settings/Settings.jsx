@@ -135,7 +135,7 @@ export default function Settings() {
             <div className={styles.fieldInfo}>
               <div className={styles.fieldLabel}>Privacy Policy</div>
             </div>
-            <button className={styles.fieldAction}>View</button>
+            <button className={styles.fieldAction} onClick={() => window.open('/privacy.html', '_blank')}>View</button>
           </div>
           <div className={styles.field}>
             <div className={styles.fieldInfo}>

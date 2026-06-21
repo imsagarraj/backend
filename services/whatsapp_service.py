@@ -48,7 +48,7 @@ def send_text_message(phone, message, phone_number_id=None):
         return {"status": "failed", "error": str(e)}
 
 
-def send_template_message(phone, template_name, params, phone_number_id=None):
+def send_template_message(phone, template_name, params, phone_number_id=None, language='en'):
     to = _clean_phone(phone)
 
     components = [{
@@ -63,7 +63,7 @@ def send_template_message(phone, template_name, params, phone_number_id=None):
         'type': 'template',
         'template': {
             'name': template_name,
-            'language': {'code': 'en'},
+            'language': {'code': language},
             'components': components,
         },
     }

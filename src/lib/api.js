@@ -117,3 +117,22 @@ export function deleteCampaign(campaignId) {
     method: 'DELETE',
   })
 }
+
+export async function importCustomersCSV(file) {
+  const { supabase } = await import('./supabase')
+  const { data: { session } } = await supabase.auth.getSession()
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await fetch(`${API_BASE}/customers/import`, {
+    method: 'POST',
+    headers: {
+      ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
+    },
+    body: formData,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || 'Import failed')
+  }
+  return res.json()
+}

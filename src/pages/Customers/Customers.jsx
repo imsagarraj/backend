@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useApp } from '../../context/AppContext'
+import { importCustomersCSV } from '../../lib/api'
 import styles from './Customers.module.css'
 
 function getInitials(name) {
@@ -58,6 +59,42 @@ export default function Customers() {
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
+  const fileInputRef = useRef(null)
+
+  const handleExport = () => {
+    const headers = ['name', 'phone', 'email', 'gender', 'product', 'purchase_date', 'order_value', 'order_id', 'notes', 'status', 'stage']
+    const rows = customers.map(c => headers.map(h => {
+      const val = c[h] ?? ''
+      const str = String(val)
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`
+      }
+      return str
+    }).join(','))
+    const bom = '\uFEFF'
+    const csv = bom + headers.join(',') + '\n' + rows.join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'customers.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const handleImport = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      await importCustomersCSV(file)
+      window.location.reload()
+    } catch (err) {
+      alert('Import failed: ' + err.message)
+    }
+    e.target.value = ''
+  }
 
   const filtered = useMemo(() => {
     let result = [...customers]
@@ -144,11 +181,12 @@ export default function Customers() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
             Add Customer
           </button>
-          <button className={styles.outlineBtn}>
+          <button className={styles.outlineBtn} onClick={() => fileInputRef.current?.click()}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
             Import CSV
           </button>
-          <button className={styles.outlineBtn}>
+          <input ref={fileInputRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleImport} />
+          <button className={styles.outlineBtn} onClick={handleExport}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
             Export
           </button>
