@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from database.supabase_client import get_supabase
 from dependencies import get_current_user, get_user_business_id, AuthUser
-from services.whatsapp_service import send_text_message
-from database.seed import get_active_agent
+from services.campaign_service import execute_campaign
 from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime, timezone, timedelta
@@ -35,10 +34,6 @@ class CampaignUpdate(BaseModel):
     scheduled_at: Optional[str] = None
 
 
-def _today_start():
-    return datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-
-
 def _get_target_count(supabase, biz_id, audience_type, audience_filter=None):
     query = supabase.table('customers').select('*', count='exact').eq('business_id', biz_id)
 
@@ -57,25 +52,6 @@ def _get_target_count(supabase, biz_id, audience_type, audience_filter=None):
 
     result = query.execute()
     return result.count if hasattr(result, 'count') else len(result.data)
-
-
-def _get_target_customers(supabase, biz_id, audience_type, audience_filter=None):
-    query = supabase.table('customers').select('*').eq('business_id', biz_id)
-
-    if audience_type == 'inactive':
-        thirty_days_ago = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
-        query = query.lt('last_contact', thirty_days_ago)
-    elif audience_type == 'product' and audience_filter and audience_filter.get('product'):
-        query = query.eq('product', audience_filter['product'])
-    elif audience_type == 'custom' and audience_filter:
-        if audience_filter.get('city'):
-            query = query.eq('city', audience_filter['city'])
-        if audience_filter.get('status'):
-            query = query.eq('status', audience_filter['status'])
-        if audience_filter.get('gender'):
-            query = query.eq('gender', audience_filter['gender'])
-
-    return query.execute().data
 
 
 @router.post("/campaigns/estimate")
@@ -119,17 +95,12 @@ def send_campaign(campaign_id: int, user: AuthUser = Depends(get_current_user), 
     if campaign['status'] in ('sent', 'sending'):
         raise HTTPException(status_code=400, detail="Campaign already sent or in progress")
 
-    agent = get_active_agent(biz_id)
-    if not agent:
-        raise HTTPException(status_code=400, detail="No active AI agent assigned")
-
     business = supabase.table('business_profiles').select('*').eq('id', biz_id).execute()
     if not business.data:
         raise HTTPException(status_code=400, detail="Business profile not found")
     business = business.data[0]
 
-    pn_id = business.get('meta_phone_number_id')
-    if not pn_id:
+    if not business.get('meta_phone_number_id'):
         raise HTTPException(status_code=400, detail="WhatsApp not configured. Set up your WhatsApp number in Business Profile first.")
 
     supabase.table('campaigns').update({
@@ -137,42 +108,14 @@ def send_campaign(campaign_id: int, user: AuthUser = Depends(get_current_user), 
         'updated_at': datetime.now(timezone.utc).isoformat(),
     }).eq('id', campaign_id).execute()
 
-    target_customers = _get_target_customers(supabase, biz_id, campaign['audience_type'], campaign.get('audience_filter'))
-    sent_count = 0
-    failed_list = []
+    execute_campaign(campaign, business)
 
-    for customer in target_customers:
-        if not customer.get('phone'):
-            continue
-        try:
-            result = send_text_message(customer['phone'], campaign['message'], phone_number_id=pn_id)
-            if result.get('status') == 'success':
-                supabase.table('messages').insert({
-                    'customer_id': customer['id'],
-                    'business_id': biz_id,
-                    'direction': 'sent',
-                    'content': campaign['message'],
-                    'status': 'sent',
-                    'meta_message_id': result.get('message_id'),
-                    'campaign_id': campaign_id,
-                }).execute()
-                sent_count += 1
-            else:
-                failed_list.append({"customer_id": customer['id'], "phone": customer['phone'], "error": result.get('error', 'Send failed')})
-        except Exception as e:
-            failed_list.append({"customer_id": customer['id'], "phone": customer['phone'], "error": str(e)[:100]})
-
-    supabase.table('campaigns').update({
-        'status': 'sent' if sent_count > 0 else 'failed',
-        'messages_sent': sent_count,
-        'updated_at': datetime.now(timezone.utc).isoformat(),
-    }).eq('id', campaign_id).execute()
+    updated = supabase.table('campaigns').select('*').eq('id', campaign_id).execute()
+    campaign = updated.data[0]
 
     return {
-        "sent": sent_count,
-        "failed": len(failed_list),
-        "total": len(target_customers),
-        "failed_details": failed_list[:10],
+        "sent": campaign.get('messages_sent', 0),
+        "status": campaign['status'],
     }
 
 

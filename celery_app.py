@@ -40,6 +40,11 @@ celery_app.conf.beat_schedule = {
         'task': 'tasks.message_tasks.process_smart_timing',
         'schedule': crontab(hour='*/4', minute=0),
     },
+    'process-scheduled-campaigns': {
+        'task': 'tasks.campaign_tasks.process_scheduled_campaigns',
+        'schedule': crontab(minute='*/1'),
+    },
 }
 
 import tasks.message_tasks
+import tasks.campaign_tasks
