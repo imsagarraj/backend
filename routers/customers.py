@@ -4,6 +4,7 @@ from dependencies import get_current_user, get_user_business_id, AuthUser
 from database.seed import get_active_agent
 from services.whatsapp_service import send_text_message, send_template_message
 from services.deepseek_service import generate_followup_message, extract_notes_from_conversation
+from services.followup_service import generate_followup_sequence
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import date, datetime, timezone
@@ -116,6 +117,11 @@ def send_welcome_message(customer: dict, biz_id: int) -> dict:
             supabase.table('customers').update({
                 'notes': f"--- {today_date} ---\n{extracted}"
             }).eq('id', customer['id']).execute()
+
+        try:
+            generate_followup_sequence(customer, business, agent)
+        except Exception as e:
+            logger.warning(f"Failed to generate follow-up sequence for {customer.get('id')}: {e}")
 
         return {"status": "sent", "message_id": send_result.get('message_id')}
     except Exception as e:

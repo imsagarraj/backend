@@ -25,7 +25,7 @@ STAGES = [
 ]
 
 
-def enqueue(customer, business, message_type, sequence_day=None, scheduled_at=None):
+def enqueue(customer, business, message_type, sequence_day=None, scheduled_at=None, followup_sequence_id=None):
     supabase = get_supabase()
     if scheduled_at is None:
         scheduled_at = datetime.now(timezone.utc).isoformat()
@@ -44,6 +44,7 @@ def enqueue(customer, business, message_type, sequence_day=None, scheduled_at=No
             'customer_phone': customer.get('phone'),
             'product': customer.get('product') or customer.get('product_purchased', ''),
             'purchase_date': str(customer.get('purchase_date', '')),
+            'followup_sequence_id': followup_sequence_id,
         },
     }
     result = supabase.table('message_queue').insert(row).execute()
@@ -255,15 +256,13 @@ def _update_customer_after_send(item):
     now = datetime.now(timezone.utc).isoformat()
 
     if item['message_type'] == 'sequence':
-        from services.scheduler_service import get_next_sequence_day
-        next_day = get_next_sequence_day(item['sequence_day'])
-        updates = {'last_contact': now}
-        if next_day == 'completed':
-            updates['current_sequence_day'] = 30
-            updates['status'] = 'completed'
-        else:
-            updates['current_sequence_day'] = next_day
-        supabase.table('customers').update(updates).eq('id', item['customer_id']).execute()
+        seq_id = (item.get('payload') or {}).get('followup_sequence_id')
+        if seq_id:
+            from services.followup_service import complete_followup
+            complete_followup(seq_id)
+        supabase.table('customers').update({'last_contact': now}).eq(
+            'id', item['customer_id']
+        ).execute()
     else:
         supabase.table('customers').update({'last_contact': now}).eq(
             'id', item['customer_id']

@@ -2,10 +2,10 @@ from celery_app import celery_app
 from database.supabase_client import get_supabase
 from services.message_pipeline import enqueue, process_batch, retry_failed
 from services.scheduler_service import (
-    get_customers_due_today,
     get_customers_with_appointment_today,
     get_customers_with_past_appointment,
 )
+from services.followup_service import get_due_followups
 from datetime import datetime, timedelta, timezone
 import logging
 
@@ -16,9 +16,9 @@ logger = logging.getLogger(__name__)
 def enqueue_daily_sequences():
     supabase = get_supabase()
 
-    due_customers = get_customers_due_today()
+    due_followups = get_due_followups()
     seq_count = 0
-    for customer, sequence_day in due_customers:
+    for customer, touch_number, sequence_id in due_followups:
         try:
             biz_id = customer.get('business_id')
             if not biz_id:
@@ -27,7 +27,7 @@ def enqueue_daily_sequences():
             if not biz.data:
                 continue
             optimal_time = _get_optimal_time(customer)
-            enqueue(customer, biz.data[0], 'sequence', sequence_day, optimal_time)
+            enqueue(customer, biz.data[0], 'sequence', touch_number, optimal_time, followup_sequence_id=sequence_id)
             seq_count += 1
         except Exception as e:
             logger.error(f"Failed to enqueue customer {customer.get('id')}: {e}")

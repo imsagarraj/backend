@@ -51,6 +51,24 @@ CREATE POLICY "Users can manage their own customers"
   USING (auth.uid() = user_id);
 
 -- ============================================================
+-- FOLLOW-UP SEQUENCES TABLE (randomized monthly follow-ups)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS follow_up_sequences (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  customer_id BIGINT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  business_id BIGINT NOT NULL REFERENCES business_profiles(id) ON DELETE CASCADE,
+  touch_number INT NOT NULL,
+  scheduled_date DATE NOT NULL,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'skipped')),
+  message_id TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  completed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_follow_up_due ON follow_up_sequences(status, scheduled_date);
+CREATE INDEX IF NOT EXISTS idx_follow_up_customer ON follow_up_sequences(customer_id);
+
+-- ============================================================
 -- BUSINESS PROFILES TABLE
 -- ============================================================
 CREATE TABLE IF NOT EXISTS business_profiles (

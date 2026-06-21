@@ -24,10 +24,12 @@ client = OpenAI(
 DEEPSEEK_MODEL = 'deepseek/deepseek-v4-flash'
 
 SEQUENCE_INSTRUCTIONS = {
-    0: "Day 1 - Purchase welcome. Warm, celebratory, genuine.",
-    1: "Day 3 - Check-in. Caring, curious, zero pressure.",
-    3: "Day 15 - Warm follow-up. Genuine care, no sales.",
-    15: "Day 30 - Soft upsell. Natural, friendly, no pressure."
+    0: "Welcome - First message after purchase. Warm, celebratory, genuine. Ask how they're feeling about their purchase.",
+    1: "First check-in - Ask about their experience so far. How are they feeling? Any feedback?",
+    2: "Second check-in - Follow up on their progress. Ask if they have any questions or concerns.",
+    3: "Third check-in - Deeper engagement. Ask about results, satisfaction, and overall experience.",
+    4: "Fourth check-in - Relationship strengthening. Ask for feedback, suggestions, how they're really doing.",
+    5: "Fifth check-in - Check if everything is still going well. Offer help if needed.",
 }
 
 BOOK_APPOINTMENT_TOOL = {
