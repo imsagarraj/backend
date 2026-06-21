@@ -16,9 +16,11 @@ CREATE TABLE IF NOT EXISTS admin_users (
 ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;
 
 -- Only allow service_role key (backend) to access admin_users
-CREATE POLICY IF NOT EXISTS "Admin users service role only"
-  ON admin_users
-  USING (true);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname='Admin users service role only' AND tablename='admin_users') THEN
+    CREATE POLICY "Admin users service role only" ON admin_users USING (true);
+  END IF;
+END $$;
 
 -- ============================================================
 -- CUSTOMERS TABLE
@@ -46,9 +48,11 @@ CREATE TABLE IF NOT EXISTS customers (
 
 ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "Users can manage their own customers"
-  ON customers
-  USING (auth.uid() = user_id);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname='Users can manage their own customers' AND tablename='customers') THEN
+    CREATE POLICY "Users can manage their own customers" ON customers USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
 -- ============================================================
 -- FOLLOW-UP SEQUENCES TABLE (randomized monthly follow-ups)
@@ -101,6 +105,8 @@ CREATE TABLE IF NOT EXISTS business_profiles (
 
 ALTER TABLE business_profiles ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "Users can manage their own business profile"
-  ON business_profiles
-  USING (auth.uid() = user_id);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname='Users can manage their own business profile' AND tablename='business_profiles') THEN
+    CREATE POLICY "Users can manage their own business profile" ON business_profiles USING (auth.uid() = user_id);
+  END IF;
+END $$;
