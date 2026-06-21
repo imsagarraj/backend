@@ -72,6 +72,9 @@ CREATE TABLE IF NOT EXISTS follow_up_sequences (
 CREATE INDEX IF NOT EXISTS idx_follow_up_due ON follow_up_sequences(status, scheduled_date);
 CREATE INDEX IF NOT EXISTS idx_follow_up_customer ON follow_up_sequences(customer_id);
 
+-- Normalize existing phone numbers (strip +, spaces, dashes)
+UPDATE customers SET phone = regexp_replace(phone, '[+\s\-\(\)]', '', 'g') WHERE phone ~ '[\+\s\-\(\)]';
+
 -- ============================================================
 -- BUSINESS PROFILES TABLE
 -- ============================================================

@@ -136,6 +136,7 @@ def create_customer(data: CustomerCreate, background_tasks: BackgroundTasks, use
     payload = data.model_dump(mode='json')
     payload['user_id'] = user.id
     payload['business_id'] = biz_id
+    payload['phone'] = payload['phone'].replace('+', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
     if not payload.get('purchase_date'):
         payload['purchase_date'] = datetime.now(timezone.utc).date().isoformat()
     result = supabase.table('customers').insert(payload).select().execute()

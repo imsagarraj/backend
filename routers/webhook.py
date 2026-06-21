@@ -65,9 +65,13 @@ async def receive_webhook(request: Request):
     return {"status": "ok"}
 
 
+def _clean_phone(phone):
+    return phone.replace('+', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '').replace('whatsapp:', '')
+
 async def handle_incoming_message(phone, message_text, message_id, pn_id=''):
     supabase = get_supabase()
     try:
+        phone = _clean_phone(phone)
         business = None
         if pn_id:
             biz_result = supabase.table('business_profiles').select('*').eq('meta_phone_number_id', pn_id).execute()
