@@ -248,6 +248,10 @@ export default function CustomerProfile() {
                     <span style={{ fontWeight: 600 }}>{toIST(customer.last_contact)}</span>
                   </div>
                   <div>
+                    <span style={{ color: 'var(--color-text-secondary)' }}>Best Time: </span>
+                    <span style={{ fontWeight: 600, color: 'var(--color-success)' }}>{customer.best_contact_time ? `${customer.best_contact_time} IST` : '—'}</span>
+                  </div>
+                  <div>
                     <span style={{ color: 'var(--color-text-secondary)' }}>Next Booking: </span>
                     <span style={{ fontWeight: 600, color: 'var(--color-success)' }}>{toIST(customer.next_booking)}</span>
                   </div>

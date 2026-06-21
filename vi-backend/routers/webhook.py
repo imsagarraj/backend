@@ -8,7 +8,7 @@ from database.supabase_client import get_supabase
 from database.seed import get_active_agent
 from services.whatsapp_service import send_text_message, send_read_and_typing
 from services.deepseek_service import generate_reply, detect_personality, extract_notes_from_conversation
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 env_path = Path(__file__).resolve().parent.parent / '.env'
 load_dotenv(env_path)
@@ -120,10 +120,13 @@ async def handle_incoming_message(phone, message_text, message_id, pn_id=''):
 
         response_count = (customer.get('response_count') or 0) + 1
         personality = detect_personality(message_text)
+        now_ist = datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)
+        reply_hour = f"{now_ist.hour:02d}:00"
         supabase.table('customers').update({
             'response_count': response_count,
             'last_contact': datetime.now(timezone.utc).isoformat(),
             'personality_profile': personality,
+            'best_contact_time': reply_hour,
         }).eq('id', customer['id']).execute()
 
         history = supabase.table('conversation_history').select('*').eq(
