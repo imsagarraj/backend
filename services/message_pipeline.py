@@ -123,6 +123,14 @@ def process_batch(batch_size=20):
     now = datetime.now(timezone.utc).isoformat()
     processed = 0
 
+    schedule_items = supabase.table('message_queue').select('*').eq(
+        'stage', 'pending_schedule'
+    ).lte('scheduled_at', now).limit(batch_size).execute()
+
+    for item in schedule_items.data:
+        advance(item['id'], 'pending_ai_gen')
+        processed += 1
+
     ready_items = supabase.table('message_queue').select('*').eq(
         'stage', 'ready_to_send'
     ).lte('scheduled_at', now).limit(batch_size).execute()
