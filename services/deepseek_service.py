@@ -17,7 +17,7 @@ client = OpenAI(
     api_key=os.getenv('OPENROUTER_API_KEY'),
     base_url='https://openrouter.ai/api/v1',
     default_headers={
-        'HTTP-Referer': 'https://vinkspace.fun',
+        'HTTP-Referer': 'https://cloud.vinkspace.fun',
         'X-Title': 'VI Cloud',
     },
 )
