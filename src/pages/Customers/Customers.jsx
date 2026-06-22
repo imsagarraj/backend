@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useApp } from '../../context/AppContext'
 import { importCustomersCSV, sendMessage } from '../../lib/api'
+import { SkeletonTable, SkeletonCard, SkeletonBlock } from '../../components/Skeleton/Skeleton'
 import styles from './Customers.module.css'
 
 function getInitials(name) {
@@ -282,7 +283,7 @@ const emptyForm = {
 
 export default function Customers() {
   const navigate = useNavigate()
-  const { customers, addCustomer, deleteCustomer, updateCustomer } = useApp()
+  const { customers, customersLoading, addCustomer, deleteCustomer, updateCustomer } = useApp()
   const [search, setSearch] = useState('')
   const [showFilters, setShowFilters] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
@@ -539,7 +540,11 @@ export default function Customers() {
       )}
 
       {/* Table */}
-      {customers.length === 0 ? (
+      {customersLoading ? (
+        <div className={styles.tableCard}>
+          <div style={{ padding: 16 }}><SkeletonTable rows={6} cols={5} /></div>
+        </div>
+      ) : customers.length === 0 ? (
         <div className={`${styles.tableCard} ${styles.emptyState}`}>
           <div className={styles.emptyIllustration}>
             <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M17 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1"/><circle cx="9" cy="7" r="4"/></svg>

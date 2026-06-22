@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 
 import { useApp } from '../../context/AppContext'
+import { SkeletonCard, SkeletonLine, SkeletonChart } from '../../components/Skeleton/Skeleton'
 import styles from './Dashboard.module.css'
 
 function getGreeting() {
@@ -42,7 +43,14 @@ export default function Dashboard() {
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
         <div className={styles.pageTitle}>{getGreeting()}, {displayName} 👋</div>
         <div className={styles.pageSubtitle}>{formatDate()}</div>
-        <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem', marginTop: 40 }}>Loading dashboard...</p>
+        <div className={styles.statsRow} style={{ marginTop: 24 }}>
+          {[1, 2, 3, 4].map(i => <SkeletonCard key={i} height={100} />)}
+        </div>
+        <div style={{ display: 'flex', gap: 16, marginTop: 16 }}>
+          <div style={{ flex: 2 }}><SkeletonCard height={200} /></div>
+          <div style={{ flex: 1 }}><SkeletonCard height={200} /></div>
+        </div>
+        <div style={{ marginTop: 16 }}><SkeletonCard height={150} /></div>
       </motion.div>
     )
   }

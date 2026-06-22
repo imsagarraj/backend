@@ -1,0 +1,68 @@
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.line, .block, .circle, .card, .chart, .tableHeader, .tableRow {
+  background: linear-gradient(90deg, var(--color-bg-alt) 25%, var(--color-border) 50%, var(--color-bg-alt) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+.circle {
+  border-radius: 50%;
+}
+
+.card {
+  border-radius: var(--radius-md);
+  background: linear-gradient(90deg, var(--color-bg-alt) 25%, var(--color-border) 50%, var(--color-bg-alt) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  padding: 16px;
+}
+
+.table {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tableHeader {
+  display: flex;
+  gap: 16px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+}
+
+.tableRow {
+  display: flex;
+  gap: 16px;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+}
+
+.avatarRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatarText {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chart {
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 16px;
+}
+
+.chart div {
+  flex: 1;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}

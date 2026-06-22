@@ -1,6 +1,7 @@
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AppProvider } from './context/AppContext'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { SkeletonLine, SkeletonCircle, SkeletonBlock } from './components/Skeleton/Skeleton'
 import Login from './pages/Login/Login'
 import ResetPassword from './pages/ResetPassword/ResetPassword'
 import Layout from './components/Layout/Layout'
@@ -27,7 +28,12 @@ function ProtectedRoute({ children }) {
   if (loading || isAdmin === undefined) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-        Loading...
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, width: 240 }}>
+          <SkeletonCircle size={48} />
+          <SkeletonLine width={160} height={16} />
+          <SkeletonLine width={120} height={12} />
+          <SkeletonBlock width={200} height={80} style={{ marginTop: 8 }} />
+        </div>
       </div>
     )
   }
@@ -43,7 +49,12 @@ function AdminRoute({ children }) {
   if (loading || isAdmin === undefined) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-        Loading...
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, width: 240 }}>
+          <SkeletonCircle size={48} />
+          <SkeletonLine width={160} height={16} />
+          <SkeletonLine width={120} height={12} />
+          <SkeletonBlock width={200} height={80} style={{ marginTop: 8 }} />
+        </div>
       </div>
     )
   }
@@ -59,7 +70,12 @@ function PublicRoute({ children }) {
   if (loading || isAdmin === undefined) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-        Loading...
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, width: 240 }}>
+          <SkeletonCircle size={48} />
+          <SkeletonLine width={160} height={16} />
+          <SkeletonLine width={120} height={12} />
+          <SkeletonBlock width={200} height={80} style={{ marginTop: 8 }} />
+        </div>
       </div>
     )
   }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useApp } from '../../context/AppContext'
+import { SkeletonCard, SkeletonLine } from '../../components/Skeleton/Skeleton'
 import styles from './BusinessProfile.module.css'
 
 const indianStates = [
@@ -99,7 +100,12 @@ export default function BusinessProfile() {
     return (
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
         <div className={styles.pageTitle}>Business Profile</div>
-        <div className={styles.pageSubtitle}>Loading...</div>
+        <div className={styles.pageSubtitle}>Manage your business details</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 16 }}>
+          <SkeletonCard height={120} />
+          <SkeletonCard height={200} />
+          <SkeletonCard height={160} />
+        </div>
       </motion.div>
     )
   }

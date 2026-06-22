@@ -1,7 +1,24 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { listCampaigns, createCampaign, sendCampaign, estimateCampaignAudience, deleteCampaign, updateCampaign } from '../../lib/api'
+import { SkeletonCard, SkeletonTable, SkeletonLine } from '../../components/Skeleton/Skeleton'
 import styles from './Campaigns.module.css'
+
+function toLocalISO(datetimeLocal) {
+  if (!datetimeLocal) return null
+  const date = new Date(datetimeLocal)
+  const offset = -date.getTimezoneOffset()
+  const sign = offset >= 0 ? '+' : '-'
+  const pad = n => String(Math.abs(n)).padStart(2, '0')
+  return date.getFullYear() + '-' +
+    pad(date.getMonth() + 1) + '-' +
+    pad(date.getDate()) + 'T' +
+    pad(date.getHours()) + ':' +
+    pad(date.getMinutes()) + ':' +
+    pad(date.getSeconds()) +
+    sign + pad(Math.floor(Math.abs(offset) / 60)) + ':' +
+    pad(Math.abs(offset) % 60)
+}
 
 const statusStyles = {
   Draft: 'statusDraft',
@@ -79,7 +96,7 @@ export default function Campaigns() {
         audience_type: campaignData.audience_type,
         audience_filter: campaignData.audience_filter,
         schedule_type: campaignData.schedule_type,
-        scheduled_at: campaignData.schedule_type === 'later' ? campaignData.scheduled_at : null,
+        scheduled_at: campaignData.schedule_type === 'later' ? toLocalISO(campaignData.scheduled_at) : null,
       })
       setShowCreate(false)
       setCreateStep(1)
@@ -152,8 +169,8 @@ export default function Campaigns() {
       </div>
 
       {loading ? (
-        <div className={`${styles.tableCard}`} style={{ padding: 40, textAlign: 'center' }}>
-          <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Loading campaigns...</p>
+        <div className={styles.tableCard}>
+          <div style={{ padding: 16 }}><SkeletonTable rows={4} cols={5} /></div>
         </div>
       ) : !showCreate && campaigns.length === 0 ? (
         <div className={`${styles.tableCard} ${styles.emptyState}`}>

@@ -5,6 +5,7 @@ import {
 } from 'recharts'
 import { useApp } from '../../context/AppContext'
 import { getAnalytics } from '../../lib/api'
+import { SkeletonCard, SkeletonChart, SkeletonLine } from '../../components/Skeleton/Skeleton'
 import styles from './Insights.module.css'
 
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -51,7 +52,19 @@ export default function Insights() {
       </div>
 
       {loading ? (
-        <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem', marginTop: 20 }}>Loading insights...</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 20 }}>
+          <div style={{ display: 'flex', gap: 16 }}>
+            <SkeletonCard height={100} />
+            <SkeletonCard height={100} />
+            <SkeletonCard height={100} />
+            <SkeletonCard height={100} />
+          </div>
+          <SkeletonChart height={220} />
+          <div style={{ display: 'flex', gap: 16 }}>
+            <SkeletonCard height={180} />
+            <SkeletonCard height={180} />
+          </div>
+        </div>
       ) : empty ? (
         <div className={`${styles.chartCard} ${styles.emptyState}`}>
           <div className={styles.emptyIcon}>

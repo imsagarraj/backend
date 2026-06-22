@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useApp } from '../../context/AppContext'
 import { getMessages, sendMessage } from '../../lib/api'
+import { SkeletonLine, SkeletonCircle, SkeletonBlock } from '../../components/Skeleton/Skeleton'
 import styles from './CustomerProfile.module.css'
 
 function getInitials(name) {
@@ -281,7 +282,14 @@ export default function CustomerProfile() {
               <div>
                 <div className={styles.messageThread}>
                   {messagesLoading ? (
-                    <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>Loading messages...</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 16 }}>
+                      {[1, 2, 3].map(i => (
+                        <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexDirection: i % 2 === 0 ? 'row-reverse' : 'row' }}>
+                          <SkeletonCircle size={28} />
+                          <SkeletonBlock height={40} width={i % 2 === 0 ? '60%' : '70%'} />
+                        </div>
+                      ))}
+                    </div>
                   ) : messages.length === 0 ? (
                     <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>No messages yet</p>
                   ) : (
