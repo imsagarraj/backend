@@ -1,19 +1,12 @@
 #!/bin/bash
 set -e
 
-# Always start uvicorn
-uvicorn main:app --host 0.0.0.0 --port $PORT &
-WEB_PID=$!
+export PORT=${PORT:-8000}
+export CELERY_CONCURRENCY=${CELERY_CONCURRENCY:-2}
 
-# Start celery only if REDIS_URL is configured
 if [ -n "$REDIS_URL" ]; then
-    celery -A celery_app worker --loglevel=info --concurrency=4 --max-tasks-per-child=10 &
-    CELERY_PID=$!
-    celery -A celery_app beat --loglevel=info --pidfile=/tmp/celerybeat.pid &
-    BEAT_PID=$!
+    exec supervisord -c supervisord.conf
 else
-    echo "REDIS_URL not set — skipping Celery worker/beat"
+    echo "REDIS_URL not set — running web only"
+    exec uvicorn main:app --host 0.0.0.0 --port $PORT
 fi
-
-trap "kill $WEB_PID $CELERY_PID $BEAT_PID 2>/dev/null" EXIT
-wait

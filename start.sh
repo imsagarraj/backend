@@ -1,7 +1,9 @@
 #!/bin/bash
 set -e
 
-# Use supervisord to manage all processes (auto-restarts on crash)
+export PORT=${PORT:-8000}
+export CELERY_CONCURRENCY=${CELERY_CONCURRENCY:-2}
+
 if [ -n "$REDIS_URL" ]; then
     exec supervisord -c supervisord.conf
 else
