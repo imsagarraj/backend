@@ -5,6 +5,7 @@ import os
 import hmac
 import hashlib
 import logging
+import asyncio
 from pydantic import BaseModel, Field
 from typing import Optional
 
@@ -14,6 +15,12 @@ from database.seed import get_active_agent
 from services.whatsapp_service import send_text_message, send_read_and_typing
 from services.deepseek_service import generate_reply, detect_personality, extract_notes_from_conversation
 from datetime import datetime, timedelta, timezone
+
+_TZ_OFFSET = os.getenv('TIMEZONE_OFFSET', '+05:30')
+_tz_parts = _TZ_OFFSET.split(':')
+_tz_hours = int(_tz_parts[0])
+_tz_mins = int(_tz_parts[1]) if len(_tz_parts) > 1 else 0
+TZ_DELTA = timedelta(hours=_tz_hours, minutes=_tz_mins)
 
 
 class ReactionEntry(BaseModel):
@@ -96,7 +103,8 @@ async def verify_webhook(request: Request):
 async def receive_webhook(request: Request):
     try:
         raw_body = await request.body()
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Webhook: failed to read body: {e}")
         return {"status": "ok"}
 
     sig = request.headers.get('X-Hub-Signature-256', '')
@@ -106,7 +114,8 @@ async def receive_webhook(request: Request):
 
     try:
         body = await request.json()
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Webhook: failed to parse JSON body: {e}")
         return {"status": "ok"}
 
     try:
@@ -190,8 +199,8 @@ async def handle_incoming_message(phone, message_text, message_id, pn_id=''):
 
         response_count = (customer.get('response_count') or 0) + 1
         personality = detect_personality(message_text)
-        now_ist = datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)
-        reply_hour = f"{now_ist.hour:02d}:00"
+        now_local = datetime.now(timezone.utc) + TZ_DELTA
+        reply_hour = f"{now_local.hour:02d}:00"
         supabase.table('customers').update({
             'response_count': response_count,
             'last_contact': datetime.now(timezone.utc).isoformat(),
@@ -209,11 +218,12 @@ async def handle_incoming_message(phone, message_text, message_id, pn_id=''):
             return
 
         pn_id = business.get('meta_phone_number_id')
-        send_read_and_typing(phone, message_id, pn_id)
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, send_read_and_typing, phone, message_id, pn_id)
 
         reply = await generate_reply(customer, business, agent, message_text, history.data, supabase)
 
-        send_result = send_text_message(phone, reply, phone_number_id=pn_id)
+        send_result = await loop.run_in_executor(None, send_text_message, phone, reply, pn_id)
 
         supabase.table('messages').insert({
             'customer_id': customer['id'],
@@ -230,8 +240,9 @@ async def handle_incoming_message(phone, message_text, message_id, pn_id=''):
             'content': reply,
         }).execute()
 
-        today_date = datetime.now(timezone.utc).strftime('%d %b %Y')
-        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        today_date = (datetime.now(timezone.utc) + TZ_DELTA).strftime('%d %b %Y')
+        local_midnight = (datetime.now(timezone.utc) + TZ_DELTA).replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = (local_midnight - TZ_DELTA).replace(tzinfo=timezone.utc)
 
         today_history = supabase.table('conversation_history').select('*').eq(
             'customer_id', customer['id']

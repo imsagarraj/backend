@@ -97,22 +97,35 @@ def process_smart_timing():
         now_local = now_utc + TZ_DELTA
         week_ago_local = now_local - timedelta(days=7)
 
-        customers = supabase.table('customers').select('*').gte(
+        customers = supabase.table('customers').select('id').gte(
             'response_count', 3
         ).eq('status', 'active').execute()
 
+        if not customers.data:
+            logger.info("Smart timing: no customers with response_count >= 3")
+            return {'updated': 0}
+
+        customer_ids = [c['id'] for c in customers.data]
+        all_msgs = supabase.table('messages').select('customer_id,timestamp').eq(
+            'direction', 'received'
+        ).in_('customer_id', customer_ids).execute()
+
+        msgs_by_customer = {}
+        for msg in (all_msgs.data or []):
+            cid = msg.get('customer_id')
+            if cid:
+                msgs_by_customer.setdefault(cid, []).append(msg)
+
         updated = 0
         for customer in customers.data:
-            msgs = supabase.table('messages').select('timestamp').eq(
-                'customer_id', customer['id']
-            ).eq('direction', 'received').execute()
-
-            if len(msgs.data) < 3:
+            cid = customer['id']
+            msgs = msgs_by_customer.get(cid, [])
+            if len(msgs) < 3:
                 continue
 
             recent = []
             older = []
-            for m in msgs.data:
+            for m in msgs:
                 ts_raw = m.get('timestamp')
                 if not ts_raw:
                     continue
@@ -142,12 +155,14 @@ def process_smart_timing():
 
             supabase.table('customers').update({
                 'best_contact_time': f"{best_hour:02d}:00"
-            }).eq('id', customer['id']).execute()
+            }).eq('id', cid).execute()
             updated += 1
 
         logger.info(f"Smart timing updated for {updated} customers")
+        return {'updated': updated}
     except Exception as e:
         logger.error(f"Smart timing error: {e}")
+        return {'updated': 0}
 
 
 def _get_optimal_time(customer):

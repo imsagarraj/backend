@@ -1,4 +1,4 @@
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 from dotenv import load_dotenv
 import os
 import emoji
@@ -7,21 +7,35 @@ import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import time
+import asyncio
 
 env_path = Path(__file__).resolve().parent.parent / '.env'
 load_dotenv(env_path)
 
 logger = logging.getLogger(__name__)
 
+TIMEZONE_OFFSET = os.getenv('TIMEZONE_OFFSET', '+05:30')
+
+_api_key = os.getenv('OPENROUTER_API_KEY')
+_base_url = os.getenv('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1')
+_default_headers = {
+    'HTTP-Referer': 'https://cloud.vinkspace.fun',
+    'X-Title': 'VI Cloud',
+}
+
 client = OpenAI(
-    api_key=os.getenv('OPENROUTER_API_KEY'),
-    base_url='https://openrouter.ai/api/v1',
-    default_headers={
-        'HTTP-Referer': 'https://cloud.vinkspace.fun',
-        'X-Title': 'VI Cloud',
-    },
+    api_key=_api_key,
+    base_url=_base_url,
+    default_headers=_default_headers,
 )
-DEEPSEEK_MODEL = 'deepseek/deepseek-v4-flash'
+async_client = AsyncOpenAI(
+    api_key=_api_key,
+    base_url=_base_url,
+    default_headers=_default_headers,
+)
+DEEPSEEK_MODEL = os.getenv('DEEPSEEK_MODEL', 'deepseek/deepseek-v4-flash')
+DEFAULT_MAX_TOKENS = int(os.getenv('DEEPSEEK_MAX_TOKENS', '150'))
+DEFAULT_TEMPERATURE = float(os.getenv('DEEPSEEK_TEMPERATURE', '0.8'))
 
 SEQUENCE_INSTRUCTIONS = {
     0: "Welcome - First message after purchase. Warm, celebratory, genuine. Ask how they're feeling about their purchase.",
@@ -63,7 +77,7 @@ def _safe_text(response):
 
 
 def build_system_prompt(agent, business, customer):
-    system_prompt = agent['system_prompt'].replace(
+    system_prompt = (agent.get('system_prompt') or '').replace(
         '{business_name}', business.get('business_name', '')
     ).replace(
         '{business_type}', business.get('business_type', '')
@@ -79,7 +93,11 @@ Product they purchased: {customer.get('product_purchased') or customer.get('prod
 """
 
     if 'dental' in biz_type or 'clinic' in biz_type or 'health' in biz_type:
-        ist_now = datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)
+        tz_offset = TIMEZONE_OFFSET
+        tz_hours = int(tz_offset.split(':')[0]) if '+' in tz_offset else -int(tz_offset.split(':')[0].replace('-', ''))
+        tz_mins = int(tz_offset.split(':')[1]) if ':' in tz_offset else 0
+        tz_delta = timedelta(hours=tz_hours, minutes=tz_mins)
+        ist_now = datetime.now(timezone.utc) + tz_delta
         today = ist_now.date().isoformat()
         tomorrow_d = (ist_now.date() + timedelta(days=1)).isoformat()
         system_prompt += f"""
@@ -164,19 +182,44 @@ REACTION HANDLING:
     return system_prompt
 
 
+RETRYABLE_STATUSES = ('503', '429', '500', '502', '504')
+
+
+def _is_retryable(e: Exception) -> bool:
+    err_str = str(e)
+    status_match = any(f'"{s}"' in err_str or f' {s} ' in err_str or err_str.startswith(s) or f'HTTP {s}' in err_str for s in RETRYABLE_STATUSES)
+    return status_match or 'quota' in err_str.lower() or 'rate limit' in err_str.lower() or 'timeout' in err_str.lower()
+
+
 def _deepseek_retry(fn, max_retries=3, base_delay=2):
     last_error = None
     for attempt in range(max_retries):
         try:
             return fn()
         except Exception as e:
-            err_str = str(e)
-            if '503' in err_str or '429' in err_str or 'quota' in err_str.lower() or 'rate' in err_str.lower() or 'timeout' in err_str.lower():
+            if _is_retryable(e):
                 last_error = e
                 if attempt < max_retries - 1:
                     delay = base_delay * (2 ** attempt)
-                    logger.warning(f"DeepSeek error (attempt {attempt + 1}/{max_retries}), retrying in {delay}s: {err_str[:100]}")
+                    logger.warning(f"DeepSeek error (attempt {attempt + 1}/{max_retries}), retrying in {delay}s: {str(e)[:100]}")
                     time.sleep(delay)
+            else:
+                raise
+    raise last_error
+
+
+async def _adeepseek_retry(fn, max_retries=3, base_delay=2):
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            return await fn()
+        except Exception as e:
+            if _is_retryable(e):
+                last_error = e
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    logger.warning(f"DeepSeek error (attempt {attempt + 1}/{max_retries}), retrying in {delay}s: {str(e)[:100]}")
+                    await asyncio.sleep(delay)
             else:
                 raise
     raise last_error
@@ -211,41 +254,51 @@ def generate_followup_message(customer, business, agent, sequence_day):
     return _safe_text(response)
 
 
-def generate_reply(customer, business, agent, customer_message, history, supabase=None):
+async def generate_reply(customer, business, agent, customer_message, history, supabase=None):
     system_prompt = build_system_prompt(agent, business, customer)
 
     messages = [{"role": "system", "content": system_prompt}]
     for msg in history[-10:]:
         messages.append({
-            "role": "user" if msg['role'] == 'user' else "assistant",
-            "content": msg['content'],
+            "role": "user" if msg.get('role') == 'user' else "assistant",
+            "content": msg.get('content', ''),
         })
     messages.append({"role": "user", "content": customer_message})
 
-    first_call = _deepseek_retry(lambda: client.chat.completions.create(
+    first_call = await _adeepseek_retry(lambda: async_client.chat.completions.create(
         model=DEEPSEEK_MODEL,
         messages=messages,
-        max_tokens=150,
-        temperature=0.8,
+        max_tokens=DEFAULT_MAX_TOKENS,
+        temperature=DEFAULT_TEMPERATURE,
         tools=[BOOK_APPOINTMENT_TOOL],
     ))
+
+    if not first_call.choices:
+        logger.error("LLM returned no choices")
+        return ""
 
     choice = first_call.choices[0]
     msg = choice.message
 
     if msg.tool_calls:
         tc = msg.tool_calls[0]
-        args = json.loads(tc.function.arguments)
+        try:
+            args = json.loads(tc.function.arguments)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse tool call arguments: {e}")
+            args = {}
         date_time = args.get('date_time', '')
         reason = args.get('reason', '')
 
         if date_time and '+' not in date_time and 'Z' not in date_time:
-            date_time = date_time + '+05:30'
+            date_time = date_time + TIMEZONE_OFFSET
 
         if supabase and customer.get('id'):
-            supabase.table('customers').update({
+            result = supabase.table('customers').update({
                 'next_booking': date_time,
             }).eq('id', customer['id']).execute()
+            if not result.data:
+                logger.warning(f"Failed to update next_booking for customer {customer['id']}")
 
         customer['next_booking'] = date_time
 
@@ -264,11 +317,11 @@ def generate_reply(customer, business, agent, customer_message, history, supabas
             "content": f"Appointment booked for {date_time}" + (f" ({reason})" if reason else ""),
         })
 
-        second = _deepseek_retry(lambda: client.chat.completions.create(
+        second = await _adeepseek_retry(lambda: async_client.chat.completions.create(
             model=DEEPSEEK_MODEL,
             messages=messages,
-            max_tokens=150,
-            temperature=0.8,
+            max_tokens=DEFAULT_MAX_TOKENS,
+            temperature=DEFAULT_TEMPERATURE,
         ))
         return _safe_text(second)
 
@@ -304,6 +357,8 @@ This customer had an appointment yesterday. Follow up with them — ask how it w
 if they're feeling better, and if they need anything more. Be caring, not salesy.
 Only output the message text. Nothing else. No quotes.
 """
+    else:
+        raise ValueError(f"Unknown message_type: {message_type}")
 
     messages = [
         {"role": "system", "content": system_prompt},

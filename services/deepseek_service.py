@@ -1,4 +1,4 @@
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 from dotenv import load_dotenv
 import os
 import emoji
@@ -16,13 +16,22 @@ logger = logging.getLogger(__name__)
 
 TIMEZONE_OFFSET = os.getenv('TIMEZONE_OFFSET', '+05:30')
 
+_api_key = os.getenv('OPENROUTER_API_KEY')
+_base_url = os.getenv('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1')
+_default_headers = {
+    'HTTP-Referer': 'https://cloud.vinkspace.fun',
+    'X-Title': 'VI Cloud',
+}
+
 client = OpenAI(
-    api_key=os.getenv('OPENROUTER_API_KEY'),
-    base_url=os.getenv('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1'),
-    default_headers={
-        'HTTP-Referer': 'https://cloud.vinkspace.fun',
-        'X-Title': 'VI Cloud',
-    },
+    api_key=_api_key,
+    base_url=_base_url,
+    default_headers=_default_headers,
+)
+async_client = AsyncOpenAI(
+    api_key=_api_key,
+    base_url=_base_url,
+    default_headers=_default_headers,
 )
 DEEPSEEK_MODEL = os.getenv('DEEPSEEK_MODEL', 'deepseek/deepseek-v4-flash')
 DEFAULT_MAX_TOKENS = int(os.getenv('DEEPSEEK_MAX_TOKENS', '150'))
@@ -203,7 +212,7 @@ async def _adeepseek_retry(fn, max_retries=3, base_delay=2):
     last_error = None
     for attempt in range(max_retries):
         try:
-            return fn()
+            return await fn()
         except Exception as e:
             if _is_retryable(e):
                 last_error = e
@@ -256,7 +265,7 @@ async def generate_reply(customer, business, agent, customer_message, history, s
         })
     messages.append({"role": "user", "content": customer_message})
 
-    first_call = await _adeepseek_retry(lambda: client.chat.completions.create(
+    first_call = await _adeepseek_retry(lambda: async_client.chat.completions.create(
         model=DEEPSEEK_MODEL,
         messages=messages,
         max_tokens=DEFAULT_MAX_TOKENS,
@@ -308,7 +317,7 @@ async def generate_reply(customer, business, agent, customer_message, history, s
             "content": f"Appointment booked for {date_time}" + (f" ({reason})" if reason else ""),
         })
 
-        second = await _adeepseek_retry(lambda: client.chat.completions.create(
+        second = await _adeepseek_retry(lambda: async_client.chat.completions.create(
             model=DEEPSEEK_MODEL,
             messages=messages,
             max_tokens=DEFAULT_MAX_TOKENS,
