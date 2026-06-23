@@ -40,3 +40,9 @@ celerybeat-schedule-*
 .env
 .env.local
 *.env.local
+
+# Security files
+*.pem
+*.key
+*.cert
+credentials.json
