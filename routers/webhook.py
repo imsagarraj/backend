@@ -256,7 +256,7 @@ async def handle_incoming_message(phone, message_text, message_id, pn_id=''):
             for _ in range(3):
                 buffered = supabase.table('messages').select('content,meta_message_id').eq(
                     'customer_id', customer['id']
-                ).eq('direction', 'received').gt('created_at', last_lock_ts).neq('meta_message_id', last_msg_id).order('created_at').execute()
+                ).eq('direction', 'received').gt('timestamp', last_lock_ts).neq('meta_message_id', last_msg_id).order('timestamp').execute()
                 if not buffered.data:
                     break
                 combined = '\n'.join([m['content'] for m in buffered.data if m.get('content')])

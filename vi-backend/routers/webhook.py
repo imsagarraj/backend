@@ -13,6 +13,7 @@ from database.supabase_client import get_supabase
 from database.seed import get_active_agent
 from services.whatsapp_service import send_text_message, send_read_and_typing
 from services.deepseek_service import generate_reply, detect_personality, extract_notes_from_conversation
+from services.message_pipeline import cancel_pending_for_customer
 from datetime import datetime, timedelta, timezone
 
 
@@ -199,36 +200,88 @@ async def handle_incoming_message(phone, message_text, message_id, pn_id=''):
             'best_contact_time': reply_hour,
         }).eq('id', customer['id']).execute()
 
-        history = supabase.table('conversation_history').select('*').eq(
-            'customer_id', customer['id']
-        ).order('timestamp').execute()
+        # --- REPLY LOCK: prevent duplicate/bulk replies ---
+        now_utc = datetime.now(timezone.utc)
+        lock_ts = now_utc.isoformat()
+        stale_cutoff = (now_utc - timedelta(minutes=2)).isoformat()
 
-        agent = get_active_agent(biz_id)
-        if not agent:
-            logger.error(f"No agent available for business {biz_id}")
+        result = supabase.table('customers').update({'reply_lock': lock_ts}).eq(
+            'id', customer['id']
+        ).is_('reply_lock', 'null').execute()
+        if not result.data:
+            result = supabase.table('customers').update({'reply_lock': lock_ts}).eq(
+                'id', customer['id']
+            ).lt('reply_lock', stale_cutoff).execute()
+        if not result.data:
+            logger.info(f"reply_lock held for {customer['id']}, msg {message_id} buffered")
             return
 
-        pn_id = business.get('meta_phone_number_id')
-        send_read_and_typing(phone, message_id, pn_id)
+        try:
+            cancel_pending_for_customer(customer['id'])
 
-        reply = await generate_reply(customer, business, agent, message_text, history.data, supabase)
+            agent = get_active_agent(biz_id)
+            if not agent:
+                logger.error(f"No agent available for business {biz_id}")
+                return
 
-        send_result = send_text_message(phone, reply, phone_number_id=pn_id)
+            pn_id = business.get('meta_phone_number_id')
+            send_read_and_typing(phone, message_id, pn_id)
 
-        supabase.table('messages').insert({
-            'customer_id': customer['id'],
-            'business_id': biz_id,
-            'direction': 'sent',
-            'content': reply,
-            'status': 'sent',
-            'meta_message_id': send_result.get('message_id'),
-        }).execute()
+            history = supabase.table('conversation_history').select('*').eq(
+                'customer_id', customer['id']
+            ).order('timestamp').execute()
 
-        supabase.table('conversation_history').insert({
-            'customer_id': customer['id'],
-            'role': 'model',
-            'content': reply,
-        }).execute()
+            reply = await generate_reply(customer, business, agent, message_text, history.data, supabase)
+
+            send_result = send_text_message(phone, reply, phone_number_id=pn_id)
+
+            supabase.table('messages').insert({
+                'customer_id': customer['id'],
+                'business_id': biz_id,
+                'direction': 'sent',
+                'content': reply,
+                'status': 'sent',
+                'meta_message_id': send_result.get('message_id'),
+            }).execute()
+
+            supabase.table('conversation_history').insert({
+                'customer_id': customer['id'],
+                'role': 'model',
+                'content': reply,
+            }).execute()
+
+            # --- BUFFERED MESSAGES: check and aggregate ---
+            last_lock_ts = lock_ts
+            last_msg_id = message_id
+            for _ in range(3):
+                buffered = supabase.table('messages').select('content,meta_message_id').eq(
+                    'customer_id', customer['id']
+                ).eq('direction', 'received').gt('timestamp', last_lock_ts).neq('meta_message_id', last_msg_id).order('timestamp').execute()
+                if not buffered.data:
+                    break
+                combined = '\n'.join([m['content'] for m in buffered.data if m.get('content')])
+                history2 = supabase.table('conversation_history').select('*').eq(
+                    'customer_id', customer['id']
+                ).order('timestamp').execute()
+                reply2 = await generate_reply(customer, business, agent, combined, history2.data, supabase)
+                send_result2 = send_text_message(phone, reply2, phone_number_id=pn_id)
+                supabase.table('messages').insert({
+                    'customer_id': customer['id'],
+                    'business_id': biz_id,
+                    'direction': 'sent',
+                    'content': reply2,
+                    'status': 'sent',
+                    'meta_message_id': send_result2.get('message_id'),
+                }).execute()
+                supabase.table('conversation_history').insert({
+                    'customer_id': customer['id'],
+                    'role': 'model',
+                    'content': reply2,
+                }).execute()
+                last_lock_ts = datetime.now(timezone.utc).isoformat()
+                last_msg_id = buffered.data[-1]['meta_message_id']
+        finally:
+            supabase.table('customers').update({'reply_lock': None}).eq('id', customer['id']).execute()
 
         today_date = datetime.now(timezone.utc).strftime('%d %b %Y')
         today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -255,3 +308,7 @@ async def handle_incoming_message(phone, message_text, message_id, pn_id=''):
 
     except Exception as e:
         logger.error(f"Error handling incoming message: {e}")
+        try:
+            supabase.table('customers').update({'reply_lock': None}).eq('id', customer['id']).execute()
+        except Exception:
+            pass
