@@ -58,21 +58,11 @@ def list_businesses(admin: AuthUser = Depends(get_admin_user)):
             'agent_name': agent_info,
         })
 
-    total_customers = len(all_customers.data or [])
-    total_messages = len(all_messages.data or [])
-
-    unmatched = [bid for bid in customer_counts if bid not in {b['id'] for b in (businesses.data or [])}]
-
     return {
         'businesses': result,
         'totals': {
-            'customers': total_customers,
-            'messages': total_messages,
-        },
-        '_debug': {
-            'customer_counts_by_biz': customer_counts,
-            'message_counts_by_biz': message_counts,
-            'unmatched_business_ids_in_customers': unmatched,
+            'customers': len(all_customers.data or []),
+            'messages': len(all_messages.data or []),
         },
     }
 
@@ -104,7 +94,7 @@ def get_business_detail(business_id: int, admin: AuthUser = Depends(get_admin_us
 
 
 @router.get("/admin/pipeline")
-def get_pipeline_status(business_id: int = None, admin: AuthUser = Depends(get_admin_user)):
+def get_pipeline_status(business_id: int, admin: AuthUser = Depends(get_admin_user)):
     return get_status(business_id)
 
 
@@ -126,13 +116,12 @@ def retry_pipeline_item(item_id: int, admin: AuthUser = Depends(get_admin_user))
 
 
 @router.post("/admin/fix-orphans")
-def fix_orphan_customers(admin: AuthUser = Depends(get_admin_user)):
+def fix_orphan_customers(business_id: int, admin: AuthUser = Depends(get_admin_user)):
     supabase = get_supabase()
-    biz = supabase.table('business_profiles').select('id').limit(1).execute()
+    biz = supabase.table('business_profiles').select('id').eq('id', business_id).execute()
     if not biz.data:
-        return {'fixed': 0, 'error': 'No business profiles found'}
-    biz_id = biz.data[0]['id']
-    result = supabase.table('customers').update({'business_id': biz_id}).is_('business_id', 'null').execute()
+        raise HTTPException(status_code=404, detail="Business not found")
+    result = supabase.table('customers').update({'business_id': business_id}).is_('business_id', 'null').execute()
     return {'fixed': len(result.data or [])}
 
 
