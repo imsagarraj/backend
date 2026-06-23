@@ -3,6 +3,16 @@ from database.supabase_client import get_supabase
 from dependencies import get_admin_user, AuthUser
 from services.message_pipeline import get_status, retry_failed, get_business_pipeline
 from datetime import datetime, timezone
+from pydantic import BaseModel, Field
+from typing import Optional
+
+
+class AgentUpdate(BaseModel):
+    agent_name: Optional[str] = Field(None, min_length=1, max_length=200)
+    personality_description: Optional[str] = Field(None, max_length=2000)
+    system_prompt: Optional[str] = Field(None, max_length=10000)
+    tone_tags: Optional[str] = Field(None, max_length=500)
+    is_active: Optional[bool] = None
 
 router = APIRouter()
 
@@ -139,10 +149,9 @@ def list_agents(admin: AuthUser = Depends(get_admin_user)):
 
 
 @router.put("/admin/agents/{agent_id}")
-def update_agent(agent_id: int, data: dict, admin: AuthUser = Depends(get_admin_user)):
+def update_agent(agent_id: int, data: AgentUpdate, admin: AuthUser = Depends(get_admin_user)):
     supabase = get_supabase()
-    allowed = {'agent_name', 'personality_description', 'system_prompt', 'tone_tags', 'is_active'}
-    updates = {k: v for k, v in data.items() if k in allowed}
+    updates = data.model_dump(exclude_none=True, exclude_unset=True)
     if not updates:
         raise HTTPException(status_code=400, detail="No valid fields to update")
 

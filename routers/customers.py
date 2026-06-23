@@ -12,6 +12,18 @@ import csv
 import io
 import logging
 
+
+class CsvCustomerRow(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    phone: str = Field(..., min_length=5, max_length=20)
+    product: str = Field(..., min_length=1, max_length=200)
+    purchase_date: str = Field(..., pattern=r'^\d{4}-\d{2}-\d{2}$')
+    email: Optional[str] = Field(None, max_length=320)
+    gender: Optional[str] = Field(None, max_length=16)
+    order_value: Optional[float] = Field(None, ge=0)
+    order_id: Optional[str] = Field(None, max_length=64)
+    notes: Optional[str] = Field(None, max_length=2000)
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -207,7 +219,7 @@ def resume_customer(customer_id: int, user: AuthUser = Depends(get_current_user)
 
 @router.post("/customers/import")
 async def import_customers(file: UploadFile = File(...), user: AuthUser = Depends(get_current_user), biz_id: int = Depends(get_user_business_id)):
-    if not file.filename or not file.filename.endswith('.csv'):
+    if not file.filename or not file.filename.lower().endswith('.csv'):
         raise HTTPException(status_code=400, detail="Only CSV files are allowed")
 
     content = await file.read()
@@ -228,19 +240,20 @@ async def import_customers(file: UploadFile = File(...), user: AuthUser = Depend
 
     for row in reader:
         try:
-            data = {
-                'user_id': user.id,
-                'business_id': biz_id,
-                'name': row['name'],
-                'phone': row['phone'],
-                'product': row['product'],
-                'purchase_date': row['purchase_date'],
-                'email': row.get('email'),
-                'gender': row.get('gender'),
-                'order_value': float(row['order_value']) if row.get('order_value') else None,
-                'order_id': row.get('order_id'),
-                'notes': row.get('notes'),
-            }
+            validated = CsvCustomerRow(
+                name=row.get('name', ''),
+                phone=row.get('phone', ''),
+                product=row.get('product', ''),
+                purchase_date=row.get('purchase_date', ''),
+                email=row.get('email'),
+                gender=row.get('gender'),
+                order_value=float(row['order_value']) if row.get('order_value') else None,
+                order_id=row.get('order_id'),
+                notes=row.get('notes'),
+            )
+            data = validated.model_dump()
+            data['user_id'] = user.id
+            data['business_id'] = biz_id
             supabase.table('customers').insert(data).execute()
             imported += 1
         except Exception as e:

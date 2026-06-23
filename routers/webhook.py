@@ -5,12 +5,52 @@ import os
 import hmac
 import hashlib
 import logging
+from pydantic import BaseModel, Field
+from typing import Optional
 
 from database.supabase_client import get_supabase
 from database.seed import get_active_agent
 from services.whatsapp_service import send_text_message, send_read_and_typing
 from services.deepseek_service import generate_reply, detect_personality, extract_notes_from_conversation
 from datetime import datetime, timedelta, timezone
+
+
+class ReactionEntry(BaseModel):
+    emoji: str = Field(default='', max_length=32)
+    message_id: Optional[str] = None
+
+
+class TextEntry(BaseModel):
+    body: str = Field(default='', max_length=4096)
+
+
+class MessageEntry(BaseModel):
+    from_: str = Field(alias='from', default='', max_length=20)
+    id: str = Field(default='', max_length=64)
+    type: str = Field(default='', max_length=16)
+    text: Optional[TextEntry] = None
+    reaction: Optional[ReactionEntry] = None
+
+
+class MetadataEntry(BaseModel):
+    phone_number_id: str = Field(default='', max_length=32)
+
+
+class ValueEntry(BaseModel):
+    metadata: Optional[MetadataEntry] = None
+    messages: list[MessageEntry] = Field(default=[])
+
+
+class ChangeEntry(BaseModel):
+    value: Optional[ValueEntry] = None
+
+
+class WebhookEntry(BaseModel):
+    changes: list[ChangeEntry] = Field(default=[])
+
+
+class WebhookPayload(BaseModel):
+    entry: list[WebhookEntry] = Field(default=[])
 
 env_path = Path(__file__).resolve().parent.parent / '.env'
 load_dotenv(env_path)
@@ -68,26 +108,25 @@ async def receive_webhook(request: Request):
         return {"status": "ok"}
 
     try:
-        entries = body.get('entry', [])
-        for entry in entries:
-            changes = entry.get('changes', [])
-            for change in changes:
-                value = change.get('value', {})
-                metadata = value.get('metadata', {})
-                pn_id = metadata.get('phone_number_id', '')
-                messages = value.get('messages', [])
-                for msg in messages:
-                    if msg.get('type') == 'text':
-                        phone = msg.get('from', '')
-                        message_text = msg.get('text', {}).get('body', '')
-                        message_id = msg.get('id', '')
-                        await handle_incoming_message(phone, message_text, message_id, pn_id)
-                    elif msg.get('type') == 'reaction':
-                        phone = msg.get('from', '')
-                        emoji = msg.get('reaction', {}).get('emoji', '')
-                        message_id = msg.get('id', '')
+        payload = WebhookPayload.model_validate(body)
+    except Exception as e:
+        logger.warning(f"Webhook payload validation failed: {e}")
+        return {"status": "ok"}
+
+    try:
+        for entry in payload.entry:
+            for change in entry.changes:
+                value = change.value
+                if not value:
+                    continue
+                pn_id = value.metadata.phone_number_id if value.metadata else ''
+                for msg in value.messages:
+                    if msg.type == 'text':
+                        await handle_incoming_message(msg.from_, msg.text.body if msg.text else '', msg.id, pn_id)
+                    elif msg.type == 'reaction':
+                        emoji = msg.reaction.emoji if msg.reaction else ''
                         if emoji:
-                            await handle_incoming_message(phone, f"reacted with {emoji}", message_id, pn_id)
+                            await handle_incoming_message(msg.from_, f"reacted with {emoji}", msg.id, pn_id)
     except Exception as e:
         logger.error(f"Error processing webhook: {e}")
 
