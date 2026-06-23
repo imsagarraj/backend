@@ -35,7 +35,7 @@ async def get_current_user(request: Request) -> AuthUser:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Auth error: {e}")
+        logger.error("Auth error — invalid or expired token")
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 

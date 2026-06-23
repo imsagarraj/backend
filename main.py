@@ -18,7 +18,7 @@ from rate_limit import limiter
 sentry_sdk.init(
     dsn=os.environ.get("SENTRY_DSN"),
     enable_tracing=False,
-    send_default_pii=True,
+    send_default_pii=False,
     integrations=[
         StarletteIntegration(),
         FastApiIntegration(),
