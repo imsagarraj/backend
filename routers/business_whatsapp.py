@@ -20,9 +20,9 @@ def sync_whatsapp_number(business_id: int, user: AuthUser = Depends(get_current_
     if not phone:
         raise HTTPException(status_code=400, detail="No WhatsApp number set in business profile")
 
-    waba_id = os.getenv('META_WABA_ID')
+    waba_id = business.get('meta_waba_id') or os.getenv('META_WABA_ID')
     if not waba_id:
-        raise HTTPException(status_code=500, detail="META_WABA_ID not configured. Set it in server environment.")
+        raise HTTPException(status_code=500, detail="META_WABA_ID not configured. Set it in your business profile or server environment.")
 
     pn_id = fetch_phone_number_id(waba_id, phone)
     if not pn_id:
