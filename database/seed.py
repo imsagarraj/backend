@@ -118,12 +118,16 @@ def seed_admin_users():
             print(f"Admin user {email} already exists. Skipping.")
             continue
 
-        user_result = supabase.table('auth.users').select('id').eq('email', email).execute()
-        if not user_result.data:
-            print(f"Auth user {email} not found. Skipping.")
+        try:
+            user_result = supabase.rpc('lookup_auth_user_by_email', {'target_email': email}).execute()
+            if not user_result.data:
+                print(f"Auth user {email} not found. Skipping.")
+                continue
+            user_id = user_result.data[0]['id']
+        except Exception as e:
+            print(f"Could not look up auth user {email} ({e}). Run migrations/007_migration_tracker.sql first.")
             continue
 
-        user_id = user_result.data[0]['id']
         supabase.table('admin_users').insert({
             'user_id': user_id,
             'email': email,
