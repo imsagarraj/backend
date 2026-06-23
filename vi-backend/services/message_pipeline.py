@@ -1,9 +1,3 @@
-"""
-Message Pipeline State Machine
-Stages: pending_schedule -> pending_ai_gen -> ready_to_send -> sending -> sent
-                                                                   -> failed -> dead
-"""
-
 from database.supabase_client import get_supabase
 from services.whatsapp_service import send_text_message
 from services.deepseek_service import generate_followup_message, generate_appointment_message
@@ -11,6 +5,7 @@ from database.seed import get_active_agent
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +19,10 @@ STAGES = [
     'dead',
 ]
 
+SEND_WORKERS = 3
+AI_WORKERS = 2
+RATE_LIMIT_DELAY = 0.2
+
 
 def enqueue(customer, business, message_type, sequence_day=None, scheduled_at=None, followup_sequence_id=None):
     supabase = get_supabase()
@@ -33,8 +32,8 @@ def enqueue(customer, business, message_type, sequence_day=None, scheduled_at=No
         scheduled_at = scheduled_at.isoformat()
 
     row = {
-        'customer_id': customer['id'],
-        'business_id': business['id'],
+        'customer_id': customer.get('id'),
+        'business_id': business.get('id'),
         'message_type': message_type,
         'stage': 'pending_schedule',
         'sequence_day': sequence_day,
@@ -47,39 +46,55 @@ def enqueue(customer, business, message_type, sequence_day=None, scheduled_at=No
             'followup_sequence_id': followup_sequence_id,
         },
     }
+    if not row['customer_id'] or not row['business_id']:
+        logger.error(f"enqueue: missing customer_id or business_id — customer={customer.get('id')}, business={business.get('id')}")
+        return None
     result = supabase.table('message_queue').insert(row).execute()
     return result.data[0] if result.data else None
 
 
-def advance(queue_id, next_stage, updates=None):
+def advance(queue_id, next_stage, updates=None, expected_stage=None):
     supabase = get_supabase()
     payload = {
         'stage': next_stage,
         'updated_at': datetime.now(timezone.utc).isoformat(),
         **(updates or {}),
     }
-    supabase.table('message_queue').update(payload).eq('id', queue_id).execute()
+    query = supabase.table('message_queue').update(payload).eq('id', queue_id)
+    if expected_stage:
+        query = query.eq('stage', expected_stage)
+    result = query.execute()
+    return len(result.data or []) > 0
 
 
-def _send_item(item):
+def _fetch_pn_id_map(supabase, items):
+    biz_ids = list(set(item.get('business_id') for item in items if item.get('business_id')))
+    if not biz_ids:
+        return {}
+    biz_profiles = supabase.table('business_profiles').select('id, meta_phone_number_id').in_('id', biz_ids).execute()
+    return {b['id']: b.get('meta_phone_number_id') for b in (biz_profiles.data or [])}
+
+
+def _send_item(item, pn_id):
     supabase = get_supabase()
     try:
-        advance(item['id'], 'sending')
-        phone = item['payload'].get('customer_phone', '')
-        text = item.get('ai_generated_text', '')
+        if not advance(item['id'], 'sending', expected_stage='ready_to_send'):
+            logger.info(f"send_item: {item['id']} already claimed by another worker")
+            return 0
 
-        pn_id = None
-        if item.get('business_id'):
-            bp = supabase.table('business_profiles').select('meta_phone_number_id').eq('id', item['business_id']).execute()
-            if bp.data and bp.data[0].get('meta_phone_number_id'):
-                pn_id = bp.data[0]['meta_phone_number_id']
+        phone = item.get('payload', {}).get('customer_phone', '')
+        if not phone or not isinstance(phone, str) or len(phone) < 5:
+            _handle_failure(item, f'Invalid phone: {phone}')
+            return 0
+
+        text = item.get('ai_generated_text', '')
 
         result = send_text_message(phone, text, phone_number_id=pn_id)
         if result.get('status') == 'success':
             advance(item['id'], 'sent', {
                 'meta_message_id': result.get('message_id', ''),
                 'sent_at': datetime.now(timezone.utc).isoformat(),
-            })
+            }, expected_stage='sending')
             _update_customer_after_send(item)
         else:
             _handle_failure(item, result.get('error', 'WhatsApp send failed'))
@@ -111,7 +126,7 @@ def _generate_ai_text(item):
             _handle_failure(item, f'Unknown message_type: {item["message_type"]}')
             return 0
 
-        advance(item['id'], 'ready_to_send', {'ai_generated_text': text})
+        advance(item['id'], 'ready_to_send', {'ai_generated_text': text}, expected_stage='pending_ai_gen')
         return 1
     except Exception as e:
         _handle_failure(item, str(e))
@@ -127,17 +142,25 @@ def process_batch(batch_size=20):
         'stage', 'pending_schedule'
     ).lte('scheduled_at', now).limit(batch_size).execute()
 
+    if schedule_items.data:
+        pn_map = _fetch_pn_id_map(supabase, schedule_items.data)
+
     for item in schedule_items.data:
-        advance(item['id'], 'pending_ai_gen')
-        processed += 1
+        if advance(item['id'], 'pending_ai_gen', expected_stage='pending_schedule'):
+            processed += 1
 
     ready_items = supabase.table('message_queue').select('*').eq(
         'stage', 'ready_to_send'
     ).lte('scheduled_at', now).limit(batch_size).execute()
 
     if ready_items.data:
-        with ThreadPoolExecutor(max_workers=10) as pool:
-            futures = [pool.submit(_send_item, item) for item in ready_items.data]
+        pn_map = _fetch_pn_id_map(supabase, ready_items.data)
+        with ThreadPoolExecutor(max_workers=SEND_WORKERS) as pool:
+            futures = []
+            for item in ready_items.data:
+                pn_id = pn_map.get(item.get('business_id'))
+                futures.append(pool.submit(_send_item, item, pn_id))
+                time.sleep(RATE_LIMIT_DELAY)
             for f in as_completed(futures):
                 processed += f.result()
 
@@ -146,7 +169,7 @@ def process_batch(batch_size=20):
     ).limit(batch_size).execute()
 
     if ai_items.data:
-        with ThreadPoolExecutor(max_workers=5) as pool:
+        with ThreadPoolExecutor(max_workers=AI_WORKERS) as pool:
             futures = [pool.submit(_generate_ai_text, item) for item in ai_items.data]
             for f in as_completed(futures):
                 processed += f.result()
@@ -156,99 +179,98 @@ def process_batch(batch_size=20):
 
 def retry_failed():
     supabase = get_supabase()
-    failed = supabase.table('message_queue').select('*').eq('stage', 'failed').execute()
+    failed = supabase.table('message_queue').select('*').eq('stage', 'failed').limit(200).execute()
 
     retried = 0
     dead = 0
-    for item in failed.data:
-        new_count = (item.get('retry_count') or 0) + 1
-        if new_count >= item.get('max_retries', 3):
-            advance(item['id'], 'dead', {'retry_count': new_count})
-            dead += 1
+    for item in (failed.data or []):
+        current_retry = item.get('retry_count') or 0
+        max_r = item.get('max_retries', 3)
+        new_count = current_retry + 1
+
+        if new_count >= max_r:
+            result = supabase.table('message_queue').update({
+                'stage': 'dead',
+                'retry_count': new_count,
+                'updated_at': datetime.now(timezone.utc).isoformat(),
+            }).eq('id', item['id']).eq('retry_count', current_retry).execute()
+            if result.data:
+                dead += 1
         else:
-            advance(item['id'], 'pending_ai_gen', {
+            result = supabase.table('message_queue').update({
+                'stage': 'pending_ai_gen',
                 'retry_count': new_count,
                 'error_log': None,
-            })
-            retried += 1
+                'updated_at': datetime.now(timezone.utc).isoformat(),
+            }).eq('id', item['id']).eq('retry_count', current_retry).execute()
+            if result.data:
+                retried += 1
 
     return {'retried': retried, 'dead': dead}
 
 
 def get_status(business_id=None):
-    try:
-        supabase = get_supabase()
-        query = supabase.table('message_queue').select('stage', count='exact')
+    supabase = get_supabase()
+    query = supabase.table('message_queue').select('stage', count='exact')
 
-        if business_id:
-            query = query.eq('business_id', business_id)
+    if business_id:
+        query = query.eq('business_id', business_id)
 
-        all_items = query.execute()
-        counts = {s: 0 for s in STAGES}
-        for item in all_items.data:
-            counts[item['stage']] = counts.get(item['stage'], 0) + 1
+    all_items = query.execute()
+    counts = {s: 0 for s in STAGES}
+    for item in (all_items.data or []):
+        stage = item.get('stage', '')
+        counts[stage] = counts.get(stage, 0) + 1
 
-        failed_query = supabase.table('message_queue').select(
-            'id, customer_id, business_id, message_type, error_log, retry_count, created_at, updated_at'
-        ).eq('stage', 'failed').order('updated_at', desc=True).limit(20)
+    failed_query = supabase.table('message_queue').select(
+        'id, customer_id, business_id, message_type, error_log, retry_count, created_at, updated_at'
+    ).eq('stage', 'failed').order('updated_at', desc=True).limit(20)
 
-        if business_id:
-            failed_query = failed_query.eq('business_id', business_id)
+    if business_id:
+        failed_query = failed_query.eq('business_id', business_id)
 
-        failed_items = failed_query.execute()
+    failed_items = failed_query.execute()
 
-        items_query = supabase.table('message_queue').select(
-            'id, customer_id, business_id, message_type, stage, sequence_day, error_log, retry_count, max_retries, scheduled_at, created_at, updated_at'
-        ).order('created_at', desc=True).limit(200)
+    items_query = supabase.table('message_queue').select(
+        'id, customer_id, business_id, message_type, stage, sequence_day, error_log, retry_count, max_retries, scheduled_at, created_at, updated_at'
+    ).order('created_at', desc=True).limit(200)
 
-        if business_id:
-            items_query = items_query.eq('business_id', business_id)
+    if business_id:
+        items_query = items_query.eq('business_id', business_id)
 
-        items_data = items_query.execute()
-        items = []
+    items_data = items_query.execute()
+    items = []
+
+    if items_data.data:
+        cust_ids = list(set(item.get('customer_id') for item in items_data.data if item.get('customer_id')))
+        biz_ids = list(set(item.get('business_id') for item in items_data.data if item.get('business_id')))
+
+        cust_map = {}
+        if cust_ids:
+            cust_result = supabase.table('customers').select('id, name, phone').in_('id', cust_ids).execute()
+            cust_map = {c['id']: c for c in (cust_result.data or [])}
+
+        biz_map = {}
+        if biz_ids:
+            biz_result = supabase.table('business_profiles').select('id, business_name').in_('id', biz_ids).execute()
+            biz_map = {b['id']: b for b in (biz_result.data or [])}
+
         for item in items_data.data:
-            try:
-                customer_name = None
-                customer_phone = None
-                if item.get('customer_id'):
-                    c = supabase.table('customers').select('name, phone').eq('id', item['customer_id']).execute()
-                    if c.data:
-                        customer_name = c.data[0].get('name')
-                        customer_phone = c.data[0].get('phone')
-                business_name = None
-                if item.get('business_id'):
-                    b = supabase.table('business_profiles').select('business_name').eq('id', item['business_id']).execute()
-                    if b.data:
-                        business_name = b.data[0].get('business_name')
-                items.append({
-                    **item,
-                    'customer_name': customer_name,
-                    'customer_phone': customer_phone,
-                    'business_name': business_name,
-                })
-            except Exception as e:
-                logger.error(f"Error enriching queue item {item.get('id')}: {e}")
-                items.append({
-                    **item,
-                    'customer_name': None,
-                    'customer_phone': None,
-                    'business_name': None,
-                })
+            c = cust_map.get(item.get('customer_id'), {})
+            b = biz_map.get(item.get('business_id'), {})
+            items.append({
+                **item,
+                'customer_name': c.get('name'),
+                'customer_phone': c.get('phone'),
+                'business_name': b.get('business_name'),
+            })
 
-        return {
-            'counts': counts,
-            'total': sum(counts.values()),
-            'recent_failures': failed_items.data,
-            'items': items,
-        }
-    except Exception as e:
-        logger.error(f"get_status failed: {e}")
-        return {
-            'counts': {s: 0 for s in STAGES},
-            'total': 0,
-            'recent_failures': [],
-            'items': [],
-        }
+    return {
+        'counts': counts,
+        'total': sum(counts.values()),
+        'recent_failures': failed_items.data if failed_items.data else [],
+        'items': items,
+    }
 
 
 def get_business_pipeline(business_id, limit=50):
@@ -256,27 +278,27 @@ def get_business_pipeline(business_id, limit=50):
     items = supabase.table('message_queue').select(
         'id, customer_id, message_type, stage, sequence_day, error_log, retry_count, scheduled_at, created_at, updated_at'
     ).eq('business_id', business_id).order('created_at', desc=True).limit(limit).execute()
-    return items.data
+    return items.data if items.data else []
 
 
 def _update_customer_after_send(item):
     supabase = get_supabase()
     now = datetime.now(timezone.utc).isoformat()
 
-    if item['message_type'] == 'sequence':
+    if item.get('message_type') == 'sequence':
         seq_id = (item.get('payload') or {}).get('followup_sequence_id')
         if seq_id:
             from services.followup_service import complete_followup
             complete_followup(seq_id)
         supabase.table('customers').update({'last_contact': now}).eq(
-            'id', item['customer_id']
+            'id', item.get('customer_id')
         ).execute()
     else:
         supabase.table('customers').update({'last_contact': now}).eq(
-            'id', item['customer_id']
+            'id', item.get('customer_id')
         ).execute()
 
 
 def _handle_failure(item, error_msg):
-    logger.error(f"Pipeline failure: queue_id={item['id']}, error={error_msg}")
-    advance(item['id'], 'failed', {'error_log': error_msg})
+    logger.error(f"Pipeline failure: queue_id={item.get('id')}, error={error_msg}")
+    advance(item.get('id'), 'failed', {'error_log': error_msg}, expected_stage=None)
