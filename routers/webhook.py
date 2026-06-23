@@ -27,7 +27,7 @@ class TextEntry(BaseModel):
 
 class MessageEntry(BaseModel):
     from_: str = Field(alias='from', default='', max_length=20)
-    id: str = Field(default='', max_length=64)
+    id: str = Field(default='', max_length=256)
     type: str = Field(default='', max_length=16)
     text: Optional[TextEntry] = None
     reaction: Optional[ReactionEntry] = None
