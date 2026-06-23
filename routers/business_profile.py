@@ -2,35 +2,39 @@ from fastapi import APIRouter, Depends, HTTPException
 from database.supabase_client import get_supabase
 from dependencies import get_current_user, AuthUser
 from services.business_whatsapp_service import fetch_phone_number_id
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
 class BusinessProfileUpdate(BaseModel):
-    business_name: Optional[str] = None
-    business_type: Optional[str] = None
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    whatsapp: Optional[str] = None
-    gst: Optional[str] = None
-    address: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    pincode: Optional[str] = None
-    website: Optional[str] = None
-    description: Optional[str] = None
-    owner_name: Optional[str] = None
-    owner_phone: Optional[str] = None
-    owner_email: Optional[str] = None
-    owner_designation: Optional[str] = None
-    owner_dob: Optional[str] = None
-    owner_gender: Optional[str] = None
+    model_config = {'extra': 'forbid'}
+    business_name: Optional[str] = Field(None, max_length=200)
+    business_type: Optional[str] = Field(None, max_length=100)
+    email: Optional[str] = Field(None, max_length=320)
+    phone: Optional[str] = Field(None, max_length=20)
+    whatsapp: Optional[str] = Field(None, max_length=20)
+    gst: Optional[str] = Field(None, max_length=20)
+    address: Optional[str] = Field(None, max_length=500)
+    city: Optional[str] = Field(None, max_length=100)
+    state: Optional[str] = Field(None, max_length=100)
+    pincode: Optional[str] = Field(None, max_length=10)
+    website: Optional[str] = Field(None, max_length=200)
+    description: Optional[str] = Field(None, max_length=2000)
+    owner_name: Optional[str] = Field(None, max_length=200)
+    owner_phone: Optional[str] = Field(None, max_length=20)
+    owner_email: Optional[str] = Field(None, max_length=320)
+    owner_designation: Optional[str] = Field(None, max_length=100)
+    owner_dob: Optional[str] = Field(None, max_length=10)
+    owner_gender: Optional[str] = Field(None, max_length=16)
     working_days: Optional[list[str]] = None
-    opening_time: Optional[str] = None
-    closing_time: Optional[str] = None
+    opening_time: Optional[str] = Field(None, max_length=10)
+    closing_time: Optional[str] = Field(None, max_length=10)
 
 
 @router.put("/business-profile")
@@ -69,7 +73,7 @@ def upsert_business_profile(data: BusinessProfileUpdate, user: AuthUser = Depend
                         saved['meta_phone_number_id'] = pn_id
                         saved['whatsapp_verified'] = True
             except Exception as e:
-                pass
+                logger.warning(f"WhatsApp sync failed: {e}")
 
     return {
         "business": saved,
@@ -99,14 +103,14 @@ def delete_business_account(user: AuthUser = Depends(get_current_user)):
 
     biz_id = biz.data[0]['id']
 
-    customer_ids = [c['id'] for c in supabase.table('customers').select('id').eq('business_id', biz_id).execute().data]
+    customers = supabase.table('customers').select('id').eq('business_id', biz_id).execute()
+    customer_ids = [c['id'] for c in (customers.data or [])]
+
+    if customer_ids:
+        supabase.table('conversation_history').delete().in_('customer_id', customer_ids).execute()
+        supabase.table('messages').delete().in_('customer_id', customer_ids).execute()
 
     supabase.table('message_queue').delete().eq('business_id', biz_id).execute()
-
-    for cid in customer_ids:
-        supabase.table('conversation_history').delete().eq('customer_id', cid).execute()
-        supabase.table('messages').delete().eq('customer_id', cid).execute()
-
     supabase.table('campaigns').delete().eq('business_id', biz_id).execute()
     supabase.table('customers').delete().eq('business_id', biz_id).execute()
     supabase.table('business_profiles').delete().eq('id', biz_id).execute()
