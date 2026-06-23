@@ -211,7 +211,7 @@ async def handle_incoming_message(phone, message_text, message_id, pn_id=''):
         pn_id = business.get('meta_phone_number_id')
         send_read_and_typing(phone, message_id, pn_id)
 
-        reply = generate_reply(customer, business, agent, message_text, history.data, supabase)
+        reply = await generate_reply(customer, business, agent, message_text, history.data, supabase)
 
         send_result = send_text_message(phone, reply, phone_number_id=pn_id)
 
