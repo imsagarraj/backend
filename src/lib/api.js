@@ -22,7 +22,10 @@ async function request(path, options = {}, retries = 1) {
       return request(path, options, retries - 1)
     }
     const err = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(err.detail || 'API Error')
+    const msg = Array.isArray(err.detail)
+      ? err.detail.map(e => e.msg || String(e)).join('; ')
+      : (err.detail || 'API Error')
+    throw new Error(msg)
   }
   return res.json()
 }
