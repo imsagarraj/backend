@@ -106,27 +106,16 @@ def send_read_and_typing(phone, message_id, phone_number_id=None):
     if not url:
         return
 
-    read_payload = {
+    payload = {
         'messaging_product': 'whatsapp',
         'status': 'read',
         'message_id': message_id,
+        'typing_indicator': {'type': 'text'},
     }
     try:
-        requests.post(url, json=read_payload, headers=_get_headers(), timeout=REQUEST_TIMEOUT)
+        requests.post(url, json=payload, headers=_get_headers(), timeout=REQUEST_TIMEOUT)
     except Exception as e:
-        logger.warning(f"send_read_and_typing (read) failed: {e}")
-
-    typing_payload = {
-        'messaging_product': 'whatsapp',
-        'recipient_type': 'individual',
-        'to': _clean_phone(phone),
-        'type': 'action',
-        'action': {'name': 'typing_on'},
-    }
-    try:
-        requests.post(url, json=typing_payload, headers=_get_headers(), timeout=REQUEST_TIMEOUT)
-    except Exception as e:
-        logger.warning(f"send_read_and_typing (typing) failed: {e}")
+        logger.warning(f"send_read_and_typing failed: {e}")
 
 
 def mark_message_read(message_id, phone_number_id=None):
