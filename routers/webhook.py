@@ -8,6 +8,7 @@ import logging
 from pydantic import BaseModel, Field
 from typing import Optional
 
+from rate_limit import limiter
 from database.supabase_client import get_supabase
 from database.seed import get_active_agent
 from services.whatsapp_service import send_text_message, send_read_and_typing
@@ -91,6 +92,7 @@ async def verify_webhook(request: Request):
 
 
 @router.post("/webhook/whatsapp")
+@limiter.limit("30/minute")
 async def receive_webhook(request: Request):
     try:
         raw_body = await request.body()

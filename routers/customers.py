@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, Request
 from database.supabase_client import get_supabase
 from dependencies import get_current_user, get_user_business_id, AuthUser
 from database.seed import get_active_agent
@@ -8,6 +8,7 @@ from services.followup_service import generate_followup_sequence, insert_welcome
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import date, datetime, timezone
+from rate_limit import limiter
 import csv
 import io
 import logging
@@ -143,7 +144,8 @@ def send_welcome_message(customer: dict, biz_id: int) -> dict:
 
 
 @router.post("/customers")
-def create_customer(data: CustomerCreate, background_tasks: BackgroundTasks, user: AuthUser = Depends(get_current_user), biz_id: int = Depends(get_user_business_id)):
+@limiter.limit("10/minute")
+def create_customer(request: Request, data: CustomerCreate, background_tasks: BackgroundTasks, user: AuthUser = Depends(get_current_user), biz_id: int = Depends(get_user_business_id)):
     supabase = get_supabase()
     payload = data.model_dump(mode='json')
     payload['user_id'] = user.id

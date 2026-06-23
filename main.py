@@ -9,11 +9,11 @@ from starlette.requests import Request
 from starlette.responses import Response
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from dotenv import load_dotenv
 from pathlib import Path
 import os, logging
+
+from rate_limit import limiter
 
 sentry_sdk.init(
     dsn=os.environ.get("SENTRY_DSN"),
@@ -32,8 +32,6 @@ from routers import customers, messages, agents, webhook, analytics, dashboard, 
 
 env_path = Path(__file__).resolve().parent / '.env'
 load_dotenv(env_path)
-
-limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
 
 app = FastAPI(
     title="Vi Platform Backend",
