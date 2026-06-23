@@ -17,44 +17,11 @@ STAGES = [
     'sent',
     'failed',
     'dead',
-    'cancelled',
 ]
 
 SEND_WORKERS = 3
 AI_WORKERS = 2
 RATE_LIMIT_DELAY = 0.2
-
-
-def cancel_pending_for_customer(customer_id):
-    supabase = get_supabase()
-    now = datetime.now(timezone.utc).isoformat()
-
-    pending = supabase.table('message_queue').select('id,payload').eq(
-        'customer_id', customer_id
-    ).in_('stage', ['pending_schedule', 'pending_ai_gen', 'ready_to_send']).execute()
-
-    cancelled = 0
-    for item in (pending.data or []):
-        result = supabase.table('message_queue').update({
-            'stage': 'cancelled',
-            'error_log': 'Cancelled — customer sent a message',
-            'updated_at': now,
-        }).eq('id', item['id']).in_('stage', [
-            'pending_schedule', 'pending_ai_gen', 'ready_to_send'
-        ]).execute()
-        if result.data:
-            cancelled += 1
-
-    fup_id = None
-    if pending.data and pending.data[0].get('payload'):
-        fup_id = pending.data[0]['payload'].get('followup_sequence_id')
-    if fup_id:
-        supabase.table('follow_up_sequences').update({
-            'status': 'completed',
-            'completed_at': now,
-        }).eq('id', fup_id).execute()
-
-    return cancelled
 
 
 def enqueue(customer, business, message_type, sequence_day=None, scheduled_at=None, followup_sequence_id=None):
