@@ -13,14 +13,14 @@ class AssignAgent(BaseModel):
 @router.get("/agents")
 def list_agents(user: AuthUser = Depends(get_current_user)):
     supabase = get_supabase()
-    agents = supabase.table('agents').select('*').eq('is_active', True).execute()
+    agents = supabase.table('agents').select('agent_name,personality_description,tone_tags,is_premium,price_per_month,is_active,id').eq('is_active', True).execute()
     return agents.data
 
 
 @router.get("/agents/{agent_id}")
 def get_agent(agent_id: int, user: AuthUser = Depends(get_current_user)):
     supabase = get_supabase()
-    agent = supabase.table('agents').select('*').eq('id', agent_id).execute()
+    agent = supabase.table('agents').select('agent_name,personality_description,tone_tags,is_premium,price_per_month,is_active,id').eq('id', agent_id).execute()
     if not agent.data:
         raise HTTPException(status_code=404, detail="Agent not found")
     return agent.data[0]
@@ -41,4 +41,5 @@ def assign_agent(business_id: int, data: AssignAgent, user: AuthUser = Depends(g
         'active_agent_id': data.agent_id
     }).eq('id', business_id).execute()
 
-    return {"status": "success", "agent": agent.data[0]}
+    allowed = {k: agent.data[0][k] for k in ('id', 'agent_name', 'personality_description', 'tone_tags', 'is_premium', 'price_per_month')}
+    return {"status": "success", "agent": allowed}

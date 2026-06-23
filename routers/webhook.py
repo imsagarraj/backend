@@ -2,6 +2,8 @@ from fastapi import APIRouter, Request, Response
 from dotenv import load_dotenv
 from pathlib import Path
 import os
+import hmac
+import hashlib
 import logging
 
 from database.supabase_client import get_supabase
@@ -15,8 +17,25 @@ load_dotenv(env_path)
 logger = logging.getLogger(__name__)
 
 VERIFY_TOKEN = os.getenv('META_VERIFY_TOKEN')
+APP_SECRET = os.getenv('META_APP_SECRET')
 
 router = APIRouter()
+
+
+def verify_webhook_signature(raw_body: bytes, signature_header: str) -> bool:
+    if not APP_SECRET or not signature_header:
+        return False
+    expected = hmac.new(
+        APP_SECRET.encode(),
+        raw_body,
+        hashlib.sha256,
+    ).hexdigest()
+    prefix = 'sha256='
+    if signature_header.startswith(prefix):
+        received = signature_header[len(prefix):]
+    else:
+        received = signature_header
+    return hmac.compare_digest(f'sha256={expected}', f'sha256={received}')
 
 
 @router.get("/webhook/whatsapp")
@@ -33,6 +52,16 @@ async def verify_webhook(request: Request):
 
 @router.post("/webhook/whatsapp")
 async def receive_webhook(request: Request):
+    try:
+        raw_body = await request.body()
+    except Exception:
+        return {"status": "ok"}
+
+    sig = request.headers.get('X-Hub-Signature-256', '')
+    if APP_SECRET and not verify_webhook_signature(raw_body, sig):
+        logger.warning("Webhook HMAC verification failed — rejected")
+        return Response(content='', status_code=403)
+
     try:
         body = await request.json()
     except Exception:
