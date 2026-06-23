@@ -60,15 +60,17 @@ def get_dashboard(user: AuthUser = Depends(get_current_user)):
     ).order('timestamp', desc=True).limit(10).execute()
 
     activity_list = []
-    for m in recent.data:
-        c = supabase.table('customers').select('name').eq('id', m['customer_id']).execute()
-        name = c.data[0]['name'] if c.data else 'Unknown'
-        activity_list.append({
-            "customer_name": name,
-            "direction": m['direction'],
-            "content": m['content'][:50],
-            "timestamp": m.get('timestamp')
-        })
+    if recent.data:
+        cust_ids = list(set(m['customer_id'] for m in recent.data))
+        customers = supabase.table('customers').select('id, name').in_('id', cust_ids).execute()
+        name_map = {c['id']: c['name'] for c in (customers.data or [])}
+        for m in recent.data:
+            activity_list.append({
+                "customer_name": name_map.get(m['customer_id'], 'Unknown'),
+                "direction": m['direction'],
+                "content": (m.get('content') or '')[:50],
+                "timestamp": m.get('timestamp')
+            })
 
     pipeline = get_status(business_id)
 
@@ -77,18 +79,20 @@ def get_dashboard(user: AuthUser = Depends(get_current_user)):
         'id, customer_id, message_type, sequence_day, stage, scheduled_at'
     ).eq('business_id', business_id).in_('stage', ['pending_schedule', 'pending_ai_gen', 'ready_to_send']).order('scheduled_at').limit(10).execute()
 
-    for item in pending.data:
-        c = supabase.table('customers').select('name, product').eq('id', item['customer_id']).execute()
-        name = c.data[0]['name'] if c.data else 'Unknown'
-        product = c.data[0].get('product', '') if c.data else ''
-        schedule_list.append({
-            "customer_id": item['customer_id'],
-            "name": name,
-            "product": product,
-            "sequence_day": item.get('sequence_day', 0),
-            "stage": item['stage'],
-            "scheduled_at": item.get('scheduled_at'),
-        })
+    if pending.data:
+        cust_ids = list(set(item['customer_id'] for item in pending.data))
+        customers = supabase.table('customers').select('id, name, product').in_('id', cust_ids).execute()
+        cust_map = {c['id']: c for c in (customers.data or [])}
+        for item in pending.data:
+            c = cust_map.get(item['customer_id'], {})
+            schedule_list.append({
+                "customer_id": item['customer_id'],
+                "name": c.get('name', 'Unknown'),
+                "product": c.get('product', ''),
+                "sequence_day": item.get('sequence_day', 0),
+                "stage": item['stage'],
+                "scheduled_at": item.get('scheduled_at'),
+            })
 
     agent_info = None
     if biz.data and biz.data[0].get('active_agent_id'):
