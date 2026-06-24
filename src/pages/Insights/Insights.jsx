@@ -22,7 +22,7 @@ export default function Insights() {
   useEffect(() => {
     if (!business?.id) return
     setLoading(true)
-    getAnalytics(business.id, periodMap[range] || '30d')
+    getAnalytics(periodMap[range] || '30d')
       .then(setData)
       .catch(() => setData(null))
       .finally(() => setLoading(false))
