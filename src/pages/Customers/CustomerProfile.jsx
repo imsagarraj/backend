@@ -52,7 +52,7 @@ export default function CustomerProfile() {
     if (id) {
       setMessagesLoading(true)
       getMessages(Number(id))
-        .then(data => setMessages(data || []))
+        .then(data => setMessages(data?.messages || []))
         .catch(() => setMessages([]))
         .finally(() => setMessagesLoading(false))
     }
@@ -63,7 +63,7 @@ export default function CustomerProfile() {
     setSendingMessage(true)
     try {
       const msg = await sendMessage(Number(id), replyText.trim())
-      setMessages(prev => [...prev, msg])
+      setMessages(prev => Array.isArray(prev) ? [...prev, msg?.message || msg] : [msg?.message || msg])
       setReplyText('')
     } catch (err) {
       console.error('Send failed:', err)

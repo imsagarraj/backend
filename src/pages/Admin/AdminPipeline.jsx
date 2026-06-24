@@ -112,6 +112,7 @@ export default function AdminPipeline() {
         <button className={styles.tab} onClick={() => navigate('/admin/dashboard')}>Dashboard</button>
         <button className={styles.tab} onClick={() => navigate('/admin/businesses')}>Businesses</button>
         <span className={`${styles.tab} ${styles.tabActive}`}>Pipeline</span>
+        <button className={styles.tab} onClick={() => navigate('/admin/followups')}>Follow-ups</button>
         <button className={styles.tab} onClick={() => navigate('/admin/agents')}>AI Agents</button>
       </div>
 

@@ -31,6 +31,7 @@ export default function AdminBusinesses() {
         <button className={styles.tab} onClick={() => navigate('/admin/dashboard')}>Dashboard</button>
         <span className={`${styles.tab} ${styles.tabActive}`}>Businesses</span>
         <button className={styles.tab} onClick={() => navigate('/admin/pipeline')}>Pipeline</button>
+        <button className={styles.tab} onClick={() => navigate('/admin/followups')}>Follow-ups</button>
         <button className={styles.tab} onClick={() => navigate('/admin/agents')}>AI Agents</button>
       </div>
 

@@ -7,6 +7,7 @@ const navItems = [
   { path: '/admin/dashboard', label: 'Dashboard', icon: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' },
   { path: '/admin/businesses', label: 'Businesses', icon: 'M3 21h18M9 8h1m-1 4h1m-1 4h1m4-12h1m-1 4h1m-1 4h1m-6-4H6v10h3M9 21V7a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v14' },
   { path: '/admin/pipeline', label: 'Pipeline', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
+  { path: '/admin/followups', label: 'Follow-ups', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z' },
   { path: '/admin/agents', label: 'AI Agents', icon: 'M12 8V4m0 4a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4m0-8a4 4 0 0 0-4 4v4a4 4 0 0 0 4 4M8 2h8M2 12h2m16 0h2M4 6h2m12 0h2' },
 ]
 

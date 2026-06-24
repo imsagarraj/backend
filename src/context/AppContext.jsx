@@ -36,7 +36,7 @@ export function AppProvider({ children }) {
     }
     setCustomersLoading(true)
     fetchCustomers()
-      .then(data => setCustomers(data || []))
+      .then(data => setCustomers(Array.isArray(data) ? data : []))
       .catch(() => setCustomers([]))
       .finally(() => setCustomersLoading(false))
 
@@ -47,7 +47,7 @@ export function AppProvider({ children }) {
       .finally(() => setBusinessLoading(false))
 
     listAgents()
-      .then(data => setAgents(data || []))
+      .then(data => setAgents(Array.isArray(data) ? data : []))
       .catch(() => setAgents([]))
   }, [authUser])
 
@@ -65,23 +65,23 @@ export function AppProvider({ children }) {
 
   const addCustomer = useCallback(async (customerData) => {
     const customer = await createCustomer(customerData)
-    setCustomers(prev => [customer, ...prev])
+    setCustomers(prev => Array.isArray(prev) ? [customer, ...prev] : [customer])
     return customer
   }, [])
 
   const updateCustomer = useCallback(async (id, updates) => {
     const updated = await dbUpdate(id, updates)
-    setCustomers(prev => prev.map(c => c.id === id ? updated : c))
+    setCustomers(prev => Array.isArray(prev) ? prev.map(c => c.id === id ? updated : c) : [updated])
     return updated
   }, [])
 
   const deleteCustomer = useCallback(async (id) => {
     await dbDelete(id)
-    setCustomers(prev => prev.filter(c => c.id !== id))
+    setCustomers(prev => Array.isArray(prev) ? prev.filter(c => c.id !== id) : [])
   }, [])
 
   const saveBusiness = useCallback(async (profileData) => {
-    const result = await updateBusinessProfile({ ...profileData, user_id: authUser.id })
+    const result = await updateBusinessProfile(profileData)
     setBusiness(result.business)
     return result.business
   }, [authUser])

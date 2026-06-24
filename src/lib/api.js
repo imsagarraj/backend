@@ -121,6 +121,10 @@ export function deleteCampaign(campaignId) {
   })
 }
 
+export function getNotifications() {
+  return request('/notifications')
+}
+
 export async function importCustomersCSV(file) {
   const { supabase } = await import('./supabase')
   const { data: { session } } = await supabase.auth.getSession()

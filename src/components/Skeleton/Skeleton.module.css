@@ -4,9 +4,9 @@
 }
 
 .line, .block, .circle, .card, .chart, .tableHeader, .tableRow {
-  background: linear-gradient(90deg, var(--color-bg-alt) 25%, var(--color-border) 50%, var(--color-bg-alt) 75%);
+  background: linear-gradient(90deg, var(--color-accent-subtle) 25%, var(--color-border-softer) 50%, var(--color-accent-subtle) 75%);
   background-size: 800px 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
+  animation: shimmer 1.8s ease-in-out infinite;
   border-radius: var(--radius-sm);
 }
 
@@ -16,9 +16,9 @@
 
 .card {
   border-radius: var(--radius-md);
-  background: linear-gradient(90deg, var(--color-bg-alt) 25%, var(--color-border) 50%, var(--color-bg-alt) 75%);
+  background: linear-gradient(90deg, var(--color-accent-subtle) 25%, var(--color-border-softer) 50%, var(--color-accent-subtle) 75%);
   background-size: 800px 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
+  animation: shimmer 1.8s ease-in-out infinite;
   padding: 16px;
 }
 

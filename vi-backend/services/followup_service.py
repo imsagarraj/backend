@@ -48,7 +48,7 @@ def generate_followup_sequence(customer, business, agent, start_touch=1):
 
     existing = supabase.table('follow_up_sequences').select('id').eq(
         'customer_id', customer_id
-    ).in_('status', ['pending', 'completed']).execute()
+    ).eq('status', 'pending').execute()
     if existing.data:
         return existing.data
 

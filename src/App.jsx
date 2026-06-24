@@ -17,6 +17,7 @@ import Settings from './pages/Settings/Settings'
 import Onboarding from './components/Onboarding/Onboarding'
 import AdminLayout from './components/AdminLayout/AdminLayout'
 import AdminDashboard from './pages/Admin/AdminDashboard'
+import AdminFollowups from './pages/Admin/AdminFollowups'
 import AdminBusinesses from './pages/Admin/AdminBusinesses'
 import AdminBusinessDetail from './pages/Admin/AdminBusinessDetail'
 import AdminPipeline from './pages/Admin/AdminPipeline'
@@ -132,6 +133,7 @@ function AppRoutes() {
         <Route path="businesses" element={<AdminBusinesses />} />
         <Route path="businesses/:id" element={<AdminBusinessDetail />} />
         <Route path="pipeline" element={<AdminPipeline />} />
+        <Route path="followups" element={<AdminFollowups />} />
         <Route path="agents" element={<AdminAgents />} />
       </Route>
       <Route path="*" element={<Navigate to="/login" replace />} />

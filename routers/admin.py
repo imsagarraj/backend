@@ -130,6 +130,32 @@ def retry_all_failed(admin: AuthUser = Depends(get_admin_user)):
     return retry_failed()
 
 
+@router.get("/admin/followups")
+def list_followups(admin: AuthUser = Depends(get_admin_user)):
+    supabase = get_supabase()
+    seqs = supabase.table('follow_up_sequences').select('*').order('scheduled_date', desc=True).limit(100).execute()
+    items = seqs.data or []
+
+    cust_ids = list(set(s['customer_id'] for s in items if s.get('customer_id')))
+    biz_ids = list(set(s['business_id'] for s in items if s.get('business_id')))
+
+    custs = {}
+    if cust_ids:
+        c = supabase.table('customers').select('id,name,phone,status,current_sequence_day,purchase_date').in_('id', cust_ids).execute()
+        custs = {r['id']: r for r in (c.data or [])}
+
+    bizs = {}
+    if biz_ids:
+        b = supabase.table('business_profiles').select('id,business_name').in_('id', biz_ids).execute()
+        bizs = {r['id']: r for r in (b.data or [])}
+
+    for s in items:
+        s['customer'] = custs.get(s.get('customer_id'))
+        s['business'] = bizs.get(s.get('business_id'))
+
+    return items
+
+
 @router.get("/admin/agents")
 def list_agents(admin: AuthUser = Depends(get_admin_user)):
     supabase = get_supabase()

@@ -60,6 +60,7 @@ export default function AdminDashboard() {
         <span className={`${styles.tab} ${styles.tabActive}`}>Dashboard</span>
         <button className={styles.tab} onClick={() => navigate('/admin/businesses')}>Businesses</button>
         <button className={styles.tab} onClick={() => navigate('/admin/pipeline')}>Pipeline</button>
+        <button className={styles.tab} onClick={() => navigate('/admin/followups')}>Follow-ups</button>
         <button className={styles.tab} onClick={() => navigate('/admin/agents')}>AI Agents</button>
       </div>
 

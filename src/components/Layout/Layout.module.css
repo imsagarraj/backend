@@ -13,6 +13,7 @@
 
 .content {
   flex: 1;
-  padding: 32px;
+  padding: 36px 52px;
   overflow-y: auto;
+  max-width: 1280px;
 }

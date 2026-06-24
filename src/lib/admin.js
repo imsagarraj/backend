@@ -57,6 +57,10 @@ export function listAgents() {
   return request('/admin/agents')
 }
 
+export function getFollowups() {
+  return request('/admin/followups')
+}
+
 export function updateAgent(id, data) {
   return request(`/admin/agents/${id}`, {
     method: 'PUT',

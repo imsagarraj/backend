@@ -351,7 +351,7 @@ export default function Customers() {
 
   const handleBulkExport = () => {
     const headers = ['name', 'phone', 'email', 'gender', 'product', 'purchase_date', 'order_value', 'order_id', 'notes', 'status', 'stage']
-    const target = customers.filter(c => selected.includes(c.id))
+    const target = Array.isArray(customers) ? customers.filter(c => selected.includes(c.id)) : []
     const rows = target.map(c => headers.map(h => {
       const val = c[h] ?? ''
       const str = String(val)
