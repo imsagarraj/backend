@@ -68,8 +68,15 @@ def _get_target_count(supabase, biz_id, audience_type, audience_filter=None):
     return result.count if hasattr(result, 'count') else len(result.data)
 
 
+class AudienceEstimate(BaseModel):
+    model_config = {'extra': 'forbid'}
+    audience_type: Optional[str] = 'all'
+    audience_filter: Optional[AudienceFilter] = None
+    message: Optional[str] = None
+
+
 @router.post("/campaigns/estimate")
-def estimate_campaign_audience(data: CampaignCreate, user: AuthUser = Depends(get_current_user), biz_id: int = Depends(get_user_business_id)):
+def estimate_campaign_audience(data: AudienceEstimate, user: AuthUser = Depends(get_current_user), biz_id: int = Depends(get_user_business_id)):
     supabase = get_supabase()
     count = _get_target_count(supabase, biz_id, data.audience_type or 'all', data.audience_filter)
     return {"count": count}
