@@ -24,7 +24,7 @@ def process_scheduled_campaigns():
     biz_ids = list(set(c.get('business_id') for c in due.data if c.get('business_id')))
     biz_map = {}
     if biz_ids:
-        biz_result = supabase.table('business_profiles').select('id,name,*').in_('id', biz_ids).execute()
+        biz_result = supabase.table('business_profiles').select('id,business_name,*').in_('id', biz_ids).execute()
         biz_map = {b['id']: b for b in (biz_result.data or [])}
 
     for campaign in due.data:
