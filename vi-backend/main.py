@@ -1,31 +1,24 @@
 import sentry_sdk
 from sentry_sdk.integrations.starlette import StarletteIntegration
 from sentry_sdk.integrations.fastapi import FastApiIntegration
-from sentry_sdk.integrations.logging import LoggingIntegration
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import Response
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from dotenv import load_dotenv
 from pathlib import Path
-import os, logging, json, time
-
-from rate_limit import limiter
+import os, logging
 
 sentry_sdk.init(
     dsn=os.environ.get("SENTRY_DSN"),
-    enable_tracing=True,
-    traces_sample_rate=0.1,
-    profiles_sample_rate=0.1,
-    send_default_pii=False,
+    enable_tracing=False,
+    send_default_pii=True,
     integrations=[
         StarletteIntegration(),
         FastApiIntegration(),
-        LoggingIntegration(level=logging.INFO, event_level=logging.WARNING),
     ],
 )
 
@@ -37,6 +30,8 @@ from routers import customers, messages, agents, webhook, analytics, dashboard, 
 env_path = Path(__file__).resolve().parent / '.env'
 load_dotenv(env_path)
 
+limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
+
 app = FastAPI(
     title="Vi Platform Backend",
     description="AI-powered after-sales customer relationship platform",
@@ -45,27 +40,6 @@ app = FastAPI(
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
-
-MAX_BODY_SIZE = 10 * 1024 * 1024
-
-
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        content_length = request.headers.get('content-length')
-        if content_length and content_length.isdigit():
-            if int(content_length) > MAX_BODY_SIZE:
-                return PlainTextResponse('Request body too large', status_code=413)
-        response: Response = await call_next(request)
-        response.headers['X-Content-Type-Options'] = 'nosniff'
-        response.headers['X-Frame-Options'] = 'DENY'
-        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
-        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
-        response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
-        return response
-
-
-app.add_middleware(SecurityHeadersMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -120,25 +94,3 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "healthy"}
-
-
-try:
-    from prometheus_client import generate_latest, REGISTRY, Counter, Histogram
-
-    REQUEST_COUNT = Counter('http_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'status'])
-    REQUEST_DURATION = Histogram('http_request_duration_seconds', 'HTTP request duration', ['method', 'endpoint'])
-
-    @app.middleware("http")
-    async def metrics_middleware(request: Request, call_next):
-        start = time.time()
-        response = await call_next(request)
-        duration = time.time() - start
-        REQUEST_COUNT.labels(method=request.method, endpoint=request.url.path, status=response.status_code).inc()
-        REQUEST_DURATION.labels(method=request.method, endpoint=request.url.path).observe(duration)
-        return response
-
-    @app.get("/metrics")
-    def metrics():
-        return Response(content=generate_latest(REGISTRY), media_type="text/plain")
-except ImportError:
-    logger.info("prometheus_client not installed — /metrics endpoint disabled")

@@ -1,7 +1,6 @@
 import sentry_sdk
 from sentry_sdk.integrations.starlette import StarletteIntegration
 from sentry_sdk.integrations.fastapi import FastApiIntegration
-from sentry_sdk.integrations.logging import LoggingIntegration
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse, PlainTextResponse
 from starlette.middleware.cors import CORSMiddleware
@@ -12,20 +11,17 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from dotenv import load_dotenv
 from pathlib import Path
-import os, logging, json, time
+import os, logging
 
 from rate_limit import limiter
 
 sentry_sdk.init(
     dsn=os.environ.get("SENTRY_DSN"),
-    enable_tracing=True,
-    traces_sample_rate=0.1,
-    profiles_sample_rate=0.1,
+    enable_tracing=False,
     send_default_pii=False,
     integrations=[
         StarletteIntegration(),
         FastApiIntegration(),
-        LoggingIntegration(level=logging.INFO, event_level=logging.WARNING),
     ],
 )
 
@@ -120,25 +116,3 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "healthy"}
-
-
-try:
-    from prometheus_client import generate_latest, REGISTRY, Counter, Histogram
-
-    REQUEST_COUNT = Counter('http_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'status'])
-    REQUEST_DURATION = Histogram('http_request_duration_seconds', 'HTTP request duration', ['method', 'endpoint'])
-
-    @app.middleware("http")
-    async def metrics_middleware(request: Request, call_next):
-        start = time.time()
-        response = await call_next(request)
-        duration = time.time() - start
-        REQUEST_COUNT.labels(method=request.method, endpoint=request.url.path, status=response.status_code).inc()
-        REQUEST_DURATION.labels(method=request.method, endpoint=request.url.path).observe(duration)
-        return response
-
-    @app.get("/metrics")
-    def metrics():
-        return Response(content=generate_latest(REGISTRY), media_type="text/plain")
-except ImportError:
-    logger.info("prometheus_client not installed — /metrics endpoint disabled")

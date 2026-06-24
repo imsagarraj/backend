@@ -32,7 +32,6 @@ celery_app.conf.update(
     task_time_limit=330,
     result_expires=3600,
     worker_prefetch_multiplier=1,
-    beat_schedule_filename='/var/run/celerybeat-schedule',
 )
 
 celery_app.conf.beat_schedule = {

@@ -19,7 +19,6 @@ COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/pytho
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY . .
 
-RUN mkdir -p /var/run && chown app:app /var/run
 RUN chmod +x start.sh && chown -R app:app /app
 
 USER app
