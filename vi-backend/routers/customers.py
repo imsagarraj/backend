@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, Request
 from database.supabase_client import get_supabase
 from dependencies import get_current_user, get_user_business_id, AuthUser
 from database.seed import get_active_agent
@@ -6,11 +6,25 @@ from services.whatsapp_service import send_text_message, send_template_message
 from services.deepseek_service import generate_followup_message, extract_notes_from_conversation
 from services.followup_service import generate_followup_sequence, insert_welcome_touch
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
+from typing import Optional, Annotated
 from datetime import date, datetime, timezone
+from rate_limit import limiter
 import csv
 import io
 import logging
+
+
+class CsvCustomerRow(BaseModel):
+    model_config = {'extra': 'forbid'}
+    name: str = Field(..., min_length=1, max_length=200)
+    phone: str = Field(..., min_length=5, max_length=20)
+    product: str = Field(..., min_length=1, max_length=200)
+    purchase_date: str = Field(..., pattern=r'^\d{4}-\d{2}-\d{2}$')
+    email: Optional[str] = Field(None, max_length=320)
+    gender: Optional[str] = Field(None, max_length=16)
+    order_value: Optional[float] = Field(None, ge=0)
+    order_id: Optional[str] = Field(None, max_length=64)
+    notes: Optional[str] = Field(None, max_length=2000)
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +32,7 @@ router = APIRouter()
 
 
 class CustomerCreate(BaseModel):
+    model_config = {'extra': 'forbid'}
     name: str = Field(..., min_length=1, max_length=200)
     phone: str = Field(..., min_length=5, max_length=20)
     email: Optional[EmailStr] = None
@@ -36,6 +51,7 @@ class CustomerCreate(BaseModel):
 
 
 class CustomerUpdate(BaseModel):
+    model_config = {'extra': 'forbid'}
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     phone: Optional[str] = Field(None, min_length=5, max_length=20)
     email: Optional[EmailStr] = None
@@ -106,8 +122,8 @@ def send_welcome_message(customer: dict, biz_id: int) -> dict:
                 'role': 'model',
                 'content': welcome_text,
             }).execute()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to insert welcome into conversation_history: {e}")
 
         supabase.table('customers').update({
             'current_sequence_day': 1,
@@ -118,7 +134,9 @@ def send_welcome_message(customer: dict, biz_id: int) -> dict:
         initial_history = supabase.table('conversation_history').select('*').eq(
             'customer_id', customer['id']
         ).order('timestamp').execute()
-        extracted = extract_notes_from_conversation(customer, business, initial_history.data)
+        extracted = None
+        if initial_history.data:
+            extracted = extract_notes_from_conversation(customer, business, initial_history.data)
         if extracted:
             supabase.table('customers').update({
                 'notes': f"--- {today_date} ---\n{extracted}"
@@ -137,12 +155,21 @@ def send_welcome_message(customer: dict, biz_id: int) -> dict:
 
 
 @router.post("/customers")
-def create_customer(data: CustomerCreate, background_tasks: BackgroundTasks, user: AuthUser = Depends(get_current_user), biz_id: int = Depends(get_user_business_id)):
+@limiter.limit("10/minute")
+def create_customer(request: Request, data: CustomerCreate, background_tasks: BackgroundTasks, user: AuthUser = Depends(get_current_user), biz_id: int = Depends(get_user_business_id)):
     supabase = get_supabase()
     payload = data.model_dump(mode='json')
     payload['user_id'] = user.id
     payload['business_id'] = biz_id
-    payload['phone'] = payload['phone'].replace('+', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+    phone = payload['phone'].replace('+', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+    if not phone.isdigit():
+        raise HTTPException(status_code=400, detail="Phone must contain only digits after stripping formatting")
+    payload['phone'] = phone
+
+    existing = supabase.table('customers').select('id').eq('phone', phone).eq('business_id', biz_id).execute()
+    if existing.data:
+        raise HTTPException(status_code=409, detail="Customer with this phone already exists in your business")
+
     if not payload.get('purchase_date'):
         payload['purchase_date'] = datetime.now(timezone.utc).date().isoformat()
     result = supabase.table('customers').insert(payload).select().execute()
@@ -151,11 +178,12 @@ def create_customer(data: CustomerCreate, background_tasks: BackgroundTasks, use
 
     customer = result.data[0]
     background_tasks.add_task(send_welcome_message, customer, biz_id)
+    logger.info(f"Welcome message queued for customer {customer['id']} (phone={phone})")
     return customer
 
 
 @router.get("/customers")
-def list_customers(user: AuthUser = Depends(get_current_user), page: int = 1, limit: int = 50):
+def list_customers(user: AuthUser = Depends(get_current_user), page: Annotated[int, Field(ge=1)] = 1, limit: Annotated[int, Field(ge=1, le=200)] = 50):
     supabase = get_supabase()
     query = supabase.table('customers').select('*', count='exact').eq('user_id', user.id)
     query = query.order('created_at', desc=True).range((page - 1) * limit, page * limit - 1)
@@ -213,7 +241,7 @@ def resume_customer(customer_id: int, user: AuthUser = Depends(get_current_user)
 
 @router.post("/customers/import")
 async def import_customers(file: UploadFile = File(...), user: AuthUser = Depends(get_current_user), biz_id: int = Depends(get_user_business_id)):
-    if not file.filename or not file.filename.endswith('.csv'):
+    if not file.filename or not file.filename.lower().endswith('.csv'):
         raise HTTPException(status_code=400, detail="Only CSV files are allowed")
 
     content = await file.read()
@@ -234,23 +262,25 @@ async def import_customers(file: UploadFile = File(...), user: AuthUser = Depend
 
     for row in reader:
         try:
-            data = {
-                'user_id': user.id,
-                'business_id': biz_id,
-                'name': row['name'],
-                'phone': row['phone'],
-                'product': row['product'],
-                'purchase_date': row['purchase_date'],
-                'email': row.get('email'),
-                'gender': row.get('gender'),
-                'order_value': float(row['order_value']) if row.get('order_value') else None,
-                'order_id': row.get('order_id'),
-                'notes': row.get('notes'),
-            }
+            validated = CsvCustomerRow(
+                name=row.get('name', ''),
+                phone=row.get('phone', ''),
+                product=row.get('product', ''),
+                purchase_date=row.get('purchase_date', ''),
+                email=row.get('email'),
+                gender=row.get('gender'),
+                order_value=float(row['order_value']) if row.get('order_value') else None,
+                order_id=row.get('order_id'),
+                notes=row.get('notes'),
+            )
+            data = validated.model_dump()
+            data['user_id'] = user.id
+            data['business_id'] = biz_id
             supabase.table('customers').insert(data).execute()
             imported += 1
         except Exception as e:
             failed += 1
-            errors.append({"row": row.get('phone', 'unknown'), "error": str(e)[:100]})
+            logger.warning(f"CSV import row failed (phone={row.get('phone', 'unknown')}): {e}")
+            errors.append({"row": row.get('phone', 'unknown'), "error": "Validation failed"})
 
     return {"imported": imported, "failed": failed, "errors": errors}

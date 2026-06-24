@@ -37,6 +37,8 @@ class CustomerCreate(BaseModel):
     phone: str = Field(..., min_length=5, max_length=20)
     email: Optional[EmailStr] = None
     gender: Optional[str] = None
+    dob: Optional[str] = None
+    city: Optional[str] = None
     product: str = Field(..., min_length=1, max_length=200)
     purchase_date: Optional[date] = None
     order_value: Optional[float] = Field(None, ge=0)
@@ -45,6 +47,7 @@ class CustomerCreate(BaseModel):
     next_booking: Optional[str] = None
     stage: Optional[str] = None
     status: Optional[str] = None
+    start_sequence: Optional[bool] = True
 
 
 class CustomerUpdate(BaseModel):
@@ -53,6 +56,8 @@ class CustomerUpdate(BaseModel):
     phone: Optional[str] = Field(None, min_length=5, max_length=20)
     email: Optional[EmailStr] = None
     gender: Optional[str] = None
+    dob: Optional[str] = None
+    city: Optional[str] = None
     product: Optional[str] = Field(None, min_length=1, max_length=200)
     purchase_date: Optional[date] = None
     order_value: Optional[float] = Field(None, ge=0)
@@ -61,6 +66,7 @@ class CustomerUpdate(BaseModel):
     status: Optional[str] = None
     stage: Optional[str] = None
     next_booking: Optional[str] = None
+    start_sequence: Optional[bool] = None
 
 
 def send_welcome_message(customer: dict, biz_id: int) -> dict:
