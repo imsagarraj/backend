@@ -54,7 +54,7 @@ export default function Campaigns() {
     setError('')
     try {
       const data = await listCampaigns()
-      setCampaigns(Array.isArray(data) ? data : [])
+      setCampaigns(Array.isArray(data) ? data : (data?.campaigns || []))
     } catch (err) {
       setError(err.message)
       setCampaigns([])
