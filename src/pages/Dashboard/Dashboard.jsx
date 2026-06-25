@@ -91,7 +91,7 @@ function generateTimeSeries(stats, days) {
 }
 
 function EngagementChart({ stats }) {
-  const [range, setRange] = useState('30d')
+  const [range, setRange] = useState('7d')
   const [tooltip, setTooltip] = useState(null)
   const days = range === '7d' ? 7 : range === '30d' ? 30 : 90
   const data = useMemo(() => generateTimeSeries(stats, days), [stats, days])
