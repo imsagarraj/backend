@@ -191,23 +191,29 @@ def create_customer(request: Request, data: CustomerCreate, background_tasks: Ba
         raise HTTPException(status_code=400, detail="Phone must contain only digits after stripping formatting")
     payload['phone'] = phone
 
-    existing = supabase.table('customers').select('id,name,visit_count,purchase_date').eq('phone', phone).eq('business_id', biz_id).execute()
+    try:
+        existing = supabase.table('customers').select('id,name,visit_count,purchase_date').eq('phone', phone).eq('business_id', biz_id).execute()
+        has_col = True
+    except Exception:
+        existing = supabase.table('customers').select('id,name,purchase_date').eq('phone', phone).eq('business_id', biz_id).execute()
+        has_col = False
     if existing.data:
         existing_customer = existing.data[0]
-        new_visit_count = (existing_customer.get('visit_count') or 1) + 1
+        new_visit_count = (existing_customer.get('visit_count') or 1) + 1 if has_col else None
 
         update_data = {
             'name': payload['name'],
             'product': payload['product'],
             'purchase_date': payload.get('purchase_date') or datetime.now(timezone.utc).date().isoformat(),
-            'visit_count': new_visit_count,
-            'returned_at': datetime.now(timezone.utc).isoformat(),
             'current_sequence_day': 0,
             'status': 'active',
             'order_value': payload.get('order_value'),
             'order_id': payload.get('order_id'),
             'notes': payload.get('notes'),
         }
+        if new_visit_count is not None:
+            update_data['visit_count'] = new_visit_count
+            update_data['returned_at'] = datetime.now(timezone.utc).isoformat()
 
         result = supabase.table('customers').update(update_data).eq('id', existing_customer['id']).select().execute()
         if not result.data:
@@ -215,7 +221,7 @@ def create_customer(request: Request, data: CustomerCreate, background_tasks: Ba
 
         customer = result.data[0]
         background_tasks.add_task(handle_returning_customer, customer, biz_id)
-        logger.info(f"Returning customer #{customer['id']} — visit #{new_visit_count} — queued welcome back")
+        logger.info(f"Returning customer #{customer['id']} — visit #{new_visit_count or '?'} — queued welcome back")
         return customer
 
     if not payload.get('purchase_date'):
@@ -326,14 +332,21 @@ async def import_customers(file: UploadFile = File(...), user: AuthUser = Depend
             data['user_id'] = user.id
             data['business_id'] = biz_id
 
-            existing = supabase.table('customers').select('id,visit_count').eq('phone', phone).eq('business_id', biz_id).execute()
+            try:
+                existing = supabase.table('customers').select('id,visit_count').eq('phone', phone).eq('business_id', biz_id).execute()
+                has_col = True
+            except Exception:
+                existing = supabase.table('customers').select('id').eq('phone', phone).eq('business_id', biz_id).execute()
+                has_col = False
             if existing.data:
-                new_count = (existing.data[0].get('visit_count') or 1) + 1
-                data['visit_count'] = new_count
-                data['returned_at'] = datetime.now(timezone.utc).isoformat()
-                data['current_sequence_day'] = 0
+                new_count = None
+                if has_col:
+                    new_count = (existing.data[0].get('visit_count') or 1) + 1
+                    data['visit_count'] = new_count
+                    data['returned_at'] = datetime.now(timezone.utc).isoformat()
+                    data['current_sequence_day'] = 0
                 supabase.table('customers').update(data).eq('id', existing.data[0]['id']).execute()
-                logger.info(f"CSV import: updated returning customer {phone} — visit #{new_count}")
+                logger.info(f"CSV import: updated returning customer {phone}" + (f" — visit #{new_count}" if new_count else ""))
             else:
                 supabase.table('customers').insert(data).execute()
             imported += 1
