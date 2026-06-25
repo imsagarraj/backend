@@ -275,6 +275,16 @@
 .statusNoReply { background: rgba(239,68,68,0.1); color: #ef4444; }
 .statusPending { background: rgba(107,114,128,0.1); color: #6b7280; }
 
+.returningBadge {
+  display: inline-block;
+  font-size: 0.625rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: rgba(200,90,26,0.12);
+  color: #c85a1a;
+}
+
 .actionsBtn {
   width: 28px;
   height: 28px;

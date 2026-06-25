@@ -225,15 +225,18 @@ async def _adeepseek_retry(fn, max_retries=3, base_delay=2):
     raise last_error
 
 
-def generate_followup_message(customer, business, agent, sequence_day):
+def generate_followup_message(customer, business, agent, sequence_day, returning=False):
     system_prompt = build_system_prompt(agent, business, customer)
+    seq_instruction = SEQUENCE_INSTRUCTIONS.get(sequence_day, '')
+    if returning and sequence_day == 0:
+        seq_instruction = "Welcome back message for a RETURNING customer. Warm, excited to see them again, acknowledge their return. Ask how they're feeling about their new purchase."
     prompt = f"""
     Customer Name: {customer.get('name', 'Customer')}
     Product Purchased: {customer.get('product_purchased') or customer.get('product', '')}
     Purchase Date: {customer.get('purchase_date', '')}
     Business Name: {business.get('business_name', '')}
     Customer Personality: {customer.get('personality_profile', 'unknown')}
-    Sequence: {SEQUENCE_INSTRUCTIONS.get(sequence_day, '')}
+    Sequence: {seq_instruction}
 
     Generate the WhatsApp message now.
     Only output the message text. Nothing else.

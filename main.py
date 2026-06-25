@@ -97,8 +97,31 @@ app.include_router(campaigns.router, prefix=API_PREFIX, tags=["campaigns"])
 app.include_router(notifications.router, prefix=API_PREFIX, tags=["notifications"])
 
 
+def _run_migration():
+    db_url = os.getenv('DATABASE_URL')
+    if not db_url:
+        logger.warning("DATABASE_URL not set — skipping auto-migration. Run manually: see supabase-migration.sql")
+        return
+    try:
+        import psycopg2
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+        cur.execute("ALTER TABLE customers ADD COLUMN IF NOT EXISTS visit_count INTEGER DEFAULT 1")
+        cur.execute("ALTER TABLE customers ADD COLUMN IF NOT EXISTS returned_at TIMESTAMPTZ")
+        conn.commit()
+        cur.close()
+        conn.close()
+        logger.info("✅ Migration: added visit_count and returned_at columns")
+    except Exception as e:
+        logger.warning(f"Auto-migration failed (non-fatal): {e}")
+
+
 @app.on_event("startup")
 def on_startup():
+    try:
+        _run_migration()
+    except Exception as e:
+        logger.warning(f"Migration error (non-fatal): {e}")
     try:
         seed_agents()
     except Exception as e:

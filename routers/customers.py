@@ -4,7 +4,7 @@ from dependencies import get_current_user, get_user_business_id, AuthUser
 from database.seed import get_active_agent
 from services.whatsapp_service import send_text_message, send_template_message
 from services.deepseek_service import generate_followup_message, extract_notes_from_conversation
-from services.followup_service import generate_followup_sequence, insert_welcome_touch
+from services.followup_service import generate_followup_sequence, insert_welcome_touch, cancel_pending_sequences
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, Annotated
 from datetime import date, datetime, timezone
@@ -69,7 +69,7 @@ class CustomerUpdate(BaseModel):
     start_sequence: Optional[bool] = None
 
 
-def send_welcome_message(customer: dict, biz_id: int) -> dict:
+def send_welcome_message(customer: dict, biz_id: int, returning: bool = False) -> dict:
     supabase = get_supabase()
     try:
         biz = supabase.table('business_profiles').select('*').eq('id', biz_id).execute()
@@ -94,13 +94,16 @@ def send_welcome_message(customer: dict, biz_id: int) -> dict:
         )
 
         try:
-            welcome_text = generate_followup_message(customer, business, agent, 0)
+            welcome_text = generate_followup_message(customer, business, agent, 0, returning=returning)
         except Exception as e:
             logger.warning(f"AI generation failed: {e}")
             welcome_text = None
 
         if not welcome_text:
-            welcome_text = f"Hi {customer.get('name', 'there')}! 👋 Welcome to {business.get('business_name', 'us')}. We're so glad you chose us. How are you finding your {customer.get('product', 'purchase')} so far? 😊"
+            if returning:
+                welcome_text = f"Hi {customer.get('name', 'there')}! 👋 Welcome back to {business.get('business_name', 'us')}! So great to see you again. How are you enjoying your {customer.get('product', 'purchase')} this time around? 😊"
+            else:
+                welcome_text = f"Hi {customer.get('name', 'there')}! 👋 Welcome to {business.get('business_name', 'us')}. We're so glad you chose us. How are you finding your {customer.get('product', 'purchase')} so far? 😊"
 
         send_result = send_text_message(customer['phone'], welcome_text, phone_number_id=pn_id)
         if send_result.get('status') != 'success':
@@ -144,7 +147,8 @@ def send_welcome_message(customer: dict, biz_id: int) -> dict:
 
         try:
             insert_welcome_touch(customer, business)
-            generate_followup_sequence(customer, business, agent, start_touch=2)
+            if not returning:
+                generate_followup_sequence(customer, business, agent, start_touch=2)
         except Exception as e:
             logger.warning(f"Failed to generate follow-up sequence for {customer.get('id')}: {e}")
 
@@ -152,6 +156,27 @@ def send_welcome_message(customer: dict, biz_id: int) -> dict:
     except Exception as e:
         logger.error(f"Unexpected error sending welcome to customer {customer.get('id')}: {e}")
         return {"status": "error", "reason": str(e)}
+
+
+def handle_returning_customer(customer: dict, biz_id: int):
+    supabase = get_supabase()
+    try:
+        biz = supabase.table('business_profiles').select('*').eq('id', biz_id).execute()
+        if not biz.data:
+            logger.error(f"Returning customer: business {biz_id} not found")
+            return
+        business = biz.data[0]
+        agent = get_active_agent(biz_id)
+
+        cancel_pending_sequences(customer['id'])
+
+        if agent:
+            generate_followup_sequence(customer, business, agent, start_touch=1)
+
+        send_welcome_message(customer, biz_id, returning=True)
+        logger.info(f"Returning customer #{customer['id']} processed — old sequences cancelled, new ones generated")
+    except Exception as e:
+        logger.error(f"Error handling returning customer #{customer.get('id')}: {e}")
 
 
 @router.post("/customers")
@@ -166,9 +191,32 @@ def create_customer(request: Request, data: CustomerCreate, background_tasks: Ba
         raise HTTPException(status_code=400, detail="Phone must contain only digits after stripping formatting")
     payload['phone'] = phone
 
-    existing = supabase.table('customers').select('id').eq('phone', phone).eq('business_id', biz_id).execute()
+    existing = supabase.table('customers').select('id,name,visit_count,purchase_date').eq('phone', phone).eq('business_id', biz_id).execute()
     if existing.data:
-        raise HTTPException(status_code=409, detail="Customer with this phone already exists in your business")
+        existing_customer = existing.data[0]
+        new_visit_count = (existing_customer.get('visit_count') or 1) + 1
+
+        update_data = {
+            'name': payload['name'],
+            'product': payload['product'],
+            'purchase_date': payload.get('purchase_date') or datetime.now(timezone.utc).date().isoformat(),
+            'visit_count': new_visit_count,
+            'returned_at': datetime.now(timezone.utc).isoformat(),
+            'current_sequence_day': 0,
+            'status': 'active',
+            'order_value': payload.get('order_value'),
+            'order_id': payload.get('order_id'),
+            'notes': payload.get('notes'),
+        }
+
+        result = supabase.table('customers').update(update_data).eq('id', existing_customer['id']).select().execute()
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to update returning customer")
+
+        customer = result.data[0]
+        background_tasks.add_task(handle_returning_customer, customer, biz_id)
+        logger.info(f"Returning customer #{customer['id']} — visit #{new_visit_count} — queued welcome back")
+        return customer
 
     if not payload.get('purchase_date'):
         payload['purchase_date'] = datetime.now(timezone.utc).date().isoformat()
@@ -262,9 +310,10 @@ async def import_customers(file: UploadFile = File(...), user: AuthUser = Depend
 
     for row in reader:
         try:
+            phone = row.get('phone', '').replace('+', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
             validated = CsvCustomerRow(
                 name=row.get('name', ''),
-                phone=row.get('phone', ''),
+                phone=phone,
                 product=row.get('product', ''),
                 purchase_date=row.get('purchase_date', ''),
                 email=row.get('email'),
@@ -276,7 +325,17 @@ async def import_customers(file: UploadFile = File(...), user: AuthUser = Depend
             data = validated.model_dump()
             data['user_id'] = user.id
             data['business_id'] = biz_id
-            supabase.table('customers').insert(data).execute()
+
+            existing = supabase.table('customers').select('id,visit_count').eq('phone', phone).eq('business_id', biz_id).execute()
+            if existing.data:
+                new_count = (existing.data[0].get('visit_count') or 1) + 1
+                data['visit_count'] = new_count
+                data['returned_at'] = datetime.now(timezone.utc).isoformat()
+                data['current_sequence_day'] = 0
+                supabase.table('customers').update(data).eq('id', existing.data[0]['id']).execute()
+                logger.info(f"CSV import: updated returning customer {phone} — visit #{new_count}")
+            else:
+                supabase.table('customers').insert(data).execute()
             imported += 1
         except Exception as e:
             failed += 1

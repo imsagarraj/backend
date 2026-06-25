@@ -181,6 +181,20 @@ export default function CustomerProfile() {
               }} />
               {customer.status || 'unknown'}
             </div>
+            {(customer.visit_count || 0) > 1 && (
+              <div style={{
+                marginTop: 6,
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                fontSize: '0.625rem', fontWeight: 600,
+                padding: '3px 8px', borderRadius: 99,
+                background: 'rgba(200,90,26,0.12)', color: '#c85a1a',
+              }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                </svg>
+                Returning · {customer.visit_count}th Visit
+              </div>
+            )}
           </div>
           <div className={styles.quickActions}>
             <button className={styles.quickActionBtn} onClick={() => setTab('conversations')}>

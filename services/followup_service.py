@@ -91,6 +91,17 @@ def generate_followup_sequence(customer, business, agent, start_touch=1):
     return []
 
 
+def cancel_pending_sequences(customer_id):
+    supabase = get_supabase()
+    result = supabase.table('follow_up_sequences').delete().eq(
+        'customer_id', customer_id
+    ).eq('status', 'pending').execute()
+    cancelled = len(result.data) if result.data else 0
+    if cancelled:
+        logger.info(f"Cancelled {cancelled} pending sequences for customer {customer_id}")
+    return cancelled
+
+
 def get_due_followups(scheduled_date=None):
     supabase = get_supabase()
     if scheduled_date is None:

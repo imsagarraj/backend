@@ -581,6 +581,7 @@ export default function Customers() {
                 <th>Follow-up Stage</th>
                 <th>Last Contact</th>
                 <th>Status</th>
+                <th>Visits</th>
                 <th style={{ width: 40 }}></th>
               </tr>
             </thead>
@@ -601,6 +602,13 @@ export default function Customers() {
                   <td><span className={`${styles.stageBadge} ${styles[stageColors[stageDisplay(c)]] || styles.stageDone}`}>{stageDisplay(c)}</span></td>
                   <td style={{ color: 'var(--color-text-secondary)', fontSize: '0.75rem' }}>{toIST(c.last_contact || c.lastContact)}</td>
                   <td><span className={`${styles.statusBadge} ${styles[statusColors[c.status]]}`}>{c.status}</span></td>
+                  <td>
+                    {(c.visit_count || 0) > 1 ? (
+                      <span className={styles.returningBadge}>Returning · {c.visit_count}x</span>
+                    ) : (
+                      <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>—</span>
+                    )}
+                  </td>
                   <td>
                     <button className={styles.actionsBtn}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>

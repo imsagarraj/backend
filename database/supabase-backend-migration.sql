@@ -113,6 +113,10 @@ ALTER TABLE customers
 -- Add next_booking column for customer appointments
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS next_booking timestamptz;
 
+-- Add visit tracking for returning customers
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS visit_count INTEGER DEFAULT 1;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS returned_at TIMESTAMPTZ;
+
 -- ============================================================
 -- MESSAGE QUEUE (AI Pipeline)
 -- ============================================================
