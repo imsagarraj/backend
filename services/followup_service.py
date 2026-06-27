@@ -111,7 +111,7 @@ def get_due_followups(scheduled_date=None):
 
     result = supabase.table('follow_up_sequences').select(
         '*, customers!inner(*)'
-    ).eq('status', 'pending').eq('scheduled_date', scheduled_date.isoformat()).execute()
+    ).eq('status', 'pending').lte('scheduled_date', scheduled_date.isoformat()).execute()
 
     due = []
     for row in result.data:
