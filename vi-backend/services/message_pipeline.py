@@ -1,5 +1,5 @@
 from database.supabase_client import get_supabase
-from services.whatsapp_service import send_text_message
+from services.whatsapp_service import send_text_message, send_template_message
 from services.deepseek_service import generate_followup_message, generate_appointment_message
 from database.seed import get_active_agent
 from datetime import datetime, timezone
@@ -88,6 +88,8 @@ def _send_item(item, pn_id):
             return 0
 
         text = item.get('ai_generated_text', '')
+
+        send_template_message(phone, 'welcome_trigger', [], phone_number_id=pn_id, language='en_US')
 
         result = send_text_message(phone, text, phone_number_id=pn_id)
         if result.get('status') == 'success':
