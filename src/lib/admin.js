@@ -67,3 +67,10 @@ export function updateAgent(id, data) {
     body: JSON.stringify(data),
   })
 }
+
+export function updateFollowupDate(sequenceId, scheduledDate) {
+  return request(`/admin/followups/${sequenceId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ scheduled_date: scheduledDate }),
+  })
+}

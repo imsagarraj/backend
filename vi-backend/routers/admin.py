@@ -157,6 +157,27 @@ def list_followups(admin: AuthUser = Depends(get_admin_user)):
     return items
 
 
+@router.patch("/admin/followups/{sequence_id}")
+def update_followup_date(sequence_id: int, data: dict, admin: AuthUser = Depends(get_admin_user)):
+    supabase = get_supabase()
+    new_date = data.get('scheduled_date')
+    if not new_date:
+        raise HTTPException(status_code=400, detail="scheduled_date is required")
+    try:
+        datetime.strptime(new_date, '%Y-%m-%d')
+    except ValueError:
+        raise HTTPException(status_code=400, detail="scheduled_date must be YYYY-MM-DD format")
+
+    existing = supabase.table('follow_up_sequences').select('*').eq('id', sequence_id).execute()
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Follow-up sequence not found")
+
+    supabase.table('follow_up_sequences').update({
+        'scheduled_date': new_date,
+    }).eq('id', sequence_id).execute()
+    return {'status': 'updated', 'id': sequence_id, 'scheduled_date': new_date}
+
+
 @router.get("/admin/agents")
 def list_agents(admin: AuthUser = Depends(get_admin_user)):
     supabase = get_supabase()
