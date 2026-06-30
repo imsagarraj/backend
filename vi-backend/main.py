@@ -43,7 +43,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://cloud.vinkspace.fun"],
+    allow_origins=["https://cloud.vispace.in"],
     allow_methods=["*"],
     allow_headers=["*"],
     allow_credentials=False,
@@ -57,7 +57,7 @@ async def global_exception_handler(request, exc):
     return JSONResponse(
         status_code=500,
         content={"detail": "Internal server error"},
-        headers={"Access-Control-Allow-Origin": "https://cloud.vinkspace.fun"},
+        headers={"Access-Control-Allow-Origin": "https://cloud.vispace.in"},
     )
 
 API_PREFIX = "/api/v1"

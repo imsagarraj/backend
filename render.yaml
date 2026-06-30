@@ -9,7 +9,7 @@ services:
       - key: PORT
         value: 10000
       - key: ALLOWED_ORIGINS
-        value: https://cloud.vinkspace.fun
+        value: https://cloud.vispace.in
       - key: REDIS_URL
         sync: false
       - key: VITE_SUPABASE_URL

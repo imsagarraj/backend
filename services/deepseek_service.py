@@ -19,7 +19,7 @@ TIMEZONE_OFFSET = os.getenv('TIMEZONE_OFFSET', '+05:30')
 _api_key = os.getenv('OPENROUTER_API_KEY')
 _base_url = os.getenv('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1')
 _default_headers = {
-    'HTTP-Referer': 'https://cloud.vinkspace.fun',
+    'HTTP-Referer': 'https://cloud.vispace.in',
     'X-Title': 'VI Cloud',
 }
 
