@@ -90,6 +90,7 @@ def _send_item(item, pn_id):
         text = item.get('ai_generated_text', '')
 
         send_template_message(phone, 'welcome_trigger', [], phone_number_id=pn_id, language='en_US')
+        time.sleep(2)
 
         result = send_text_message(phone, text, phone_number_id=pn_id)
         if result.get('status') == 'success':
