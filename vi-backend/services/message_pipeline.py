@@ -2,7 +2,7 @@ from database.supabase_client import get_supabase
 from services.whatsapp_service import send_text_message, send_template_message
 from services.deepseek_service import generate_followup_message, generate_appointment_message
 from database.seed import get_active_agent
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 import time
@@ -87,32 +87,20 @@ def _send_item(item, pn_id):
             _handle_failure(item, f'Invalid phone: {phone}')
             return 0
 
-        payload = dict(item.get('payload', {}))
-        template_already_sent = payload.get('template_sent', False)
+        text = item.get('ai_generated_text', '')
 
-        if template_already_sent:
-            text = item.get('ai_generated_text', '')
-            result = send_text_message(phone, text, phone_number_id=pn_id)
-            if result.get('status') == 'success':
-                advance(item['id'], 'sent', {
-                    'meta_message_id': result.get('message_id', ''),
-                    'sent_at': datetime.now(timezone.utc).isoformat(),
-                }, expected_stage='sending')
-                _update_customer_after_send(item)
-            else:
-                _handle_failure(item, result.get('error', 'Text send failed'))
+        send_template_message(phone, 'welcome_trigger', [], phone_number_id=pn_id, language='en_US')
+        time.sleep(3)
+
+        result = send_text_message(phone, text, phone_number_id=pn_id)
+        if result.get('status') == 'success':
+            advance(item['id'], 'sent', {
+                'meta_message_id': result.get('message_id', ''),
+                'sent_at': datetime.now(timezone.utc).isoformat(),
+            }, expected_stage='sending')
+            _update_customer_after_send(item)
         else:
-            result = send_template_message(phone, 'welcome_trigger', [], phone_number_id=pn_id, language='en_US')
-            if result.get('status') == 'success':
-                payload['template_sent'] = True
-                payload['template_msg_id'] = result.get('message_id', '')
-                next_sched = (datetime.now(timezone.utc) + timedelta(minutes=3)).isoformat()
-                advance(item['id'], 'pending_schedule', {
-                    'payload': payload,
-                    'scheduled_at': next_sched,
-                }, expected_stage='sending')
-            else:
-                _handle_failure(item, result.get('error', 'Template send failed'))
+            _handle_failure(item, result.get('error', 'Text send failed'))
     except Exception as e:
         _handle_failure(item, str(e))
     return 1
@@ -161,13 +149,8 @@ def process_batch(batch_size=20):
         pn_map = _fetch_pn_id_map(supabase, schedule_items.data)
 
     for item in schedule_items.data:
-        payload = item.get('payload', {}) or {}
-        if payload.get('template_sent'):
-            if advance(item['id'], 'ready_to_send', expected_stage='pending_schedule'):
-                processed += 1
-        else:
-            if advance(item['id'], 'pending_ai_gen', expected_stage='pending_schedule'):
-                processed += 1
+        if advance(item['id'], 'pending_ai_gen', expected_stage='pending_schedule'):
+            processed += 1
 
     ready_items = supabase.table('message_queue').select('*').eq(
         'stage', 'ready_to_send'
