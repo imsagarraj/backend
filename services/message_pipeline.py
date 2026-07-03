@@ -14,6 +14,8 @@ STAGES = [
     'pending_ai_gen',
     'ready_to_send',
     'sending',
+    'template_sent',
+    'sending_text',
     'sent',
     'failed',
     'dead',
@@ -75,11 +77,35 @@ def _fetch_pn_id_map(supabase, items):
     return {b['id']: b.get('meta_phone_number_id') for b in (biz_profiles.data or [])}
 
 
-def _send_item(item, pn_id):
+def _send_template(item, pn_id):
     supabase = get_supabase()
     try:
         if not advance(item['id'], 'sending', expected_stage='ready_to_send'):
-            logger.info(f"send_item: {item['id']} already claimed by another worker")
+            logger.info(f"_send_template: {item['id']} already claimed by another worker")
+            return 0
+
+        phone = item.get('payload', {}).get('customer_phone', '')
+        if not phone or not isinstance(phone, str) or len(phone) < 5:
+            _handle_failure(item, f'Invalid phone: {phone}')
+            return 0
+
+        result = send_template_message(phone, 'welcome_trigger', [], phone_number_id=pn_id, language='en_US')
+        if result.get('status') == 'success':
+            advance(item['id'], 'template_sent', {
+                'meta_message_id': result.get('message_id', ''),
+            }, expected_stage='sending')
+        else:
+            _handle_failure(item, result.get('error', 'Template send failed'))
+    except Exception as e:
+        _handle_failure(item, str(e))
+    return 1
+
+
+def _send_text(item, pn_id):
+    supabase = get_supabase()
+    try:
+        if not advance(item['id'], 'sending_text', expected_stage='template_sent'):
+            logger.info(f"_send_text: {item['id']} already claimed by another worker")
             return 0
 
         phone = item.get('payload', {}).get('customer_phone', '')
@@ -88,19 +114,15 @@ def _send_item(item, pn_id):
             return 0
 
         text = item.get('ai_generated_text', '')
-
-        send_template_message(phone, 'welcome_trigger', [], phone_number_id=pn_id, language='en_US')
-        time.sleep(2)
-
         result = send_text_message(phone, text, phone_number_id=pn_id)
         if result.get('status') == 'success':
             advance(item['id'], 'sent', {
                 'meta_message_id': result.get('message_id', ''),
                 'sent_at': datetime.now(timezone.utc).isoformat(),
-            }, expected_stage='sending')
+            }, expected_stage='sending_text')
             _update_customer_after_send(item)
         else:
-            _handle_failure(item, result.get('error', 'WhatsApp send failed'))
+            _handle_failure(item, result.get('error', 'Text send failed'))
     except Exception as e:
         _handle_failure(item, str(e))
     return 1
@@ -162,7 +184,22 @@ def process_batch(batch_size=20):
             futures = []
             for item in ready_items.data:
                 pn_id = pn_map.get(item.get('business_id'))
-                futures.append(pool.submit(_send_item, item, pn_id))
+                futures.append(pool.submit(_send_template, item, pn_id))
+                time.sleep(RATE_LIMIT_DELAY)
+            for f in as_completed(futures):
+                processed += f.result()
+
+    template_sent_items = supabase.table('message_queue').select('*').eq(
+        'stage', 'template_sent'
+    ).lte('scheduled_at', now).limit(batch_size).execute()
+
+    if template_sent_items.data:
+        pn_map = _fetch_pn_id_map(supabase, template_sent_items.data)
+        with ThreadPoolExecutor(max_workers=SEND_WORKERS) as pool:
+            futures = []
+            for item in template_sent_items.data:
+                pn_id = pn_map.get(item.get('business_id'))
+                futures.append(pool.submit(_send_text, item, pn_id))
                 time.sleep(RATE_LIMIT_DELAY)
             for f in as_completed(futures):
                 processed += f.result()
