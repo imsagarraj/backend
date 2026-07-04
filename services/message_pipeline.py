@@ -136,46 +136,28 @@ def _generate_ai_text(item):
         return 0
 
 
-def _enqueue_due_sequences():
-    supabase = get_supabase()
-    from services.followup_service import get_due_followups
-    due = get_due_followups()
-    if not due:
-        return 0
-    biz_ids = list(set(c.get('business_id') for c, _, _ in due if c.get('business_id')))
-    biz_map = {}
-    if biz_ids:
-        biz_result = supabase.table('business_profiles').select('id,name,*').in_('id', biz_ids).execute()
-        biz_map = {b['id']: b for b in (biz_result.data or [])}
-    count = 0
-    for customer, touch_number, seq_id in due:
-        biz = biz_map.get(customer.get('business_id'))
-        if not biz:
-            continue
-        enqueue(customer, biz, 'sequence', touch_number, followup_sequence_id=seq_id)
-        count += 1
-    if count:
-        logger.info(f"Self-enqueue: {count} due sequences enqueued")
-    return count
-
-
 def process_batch(batch_size=20):
     supabase = get_supabase()
     now = datetime.now(timezone.utc).isoformat()
     processed = 0
 
-    _enqueue_due_sequences()
-
     schedule_items = supabase.table('message_queue').select('*').eq(
         'stage', 'pending_schedule'
     ).lte('scheduled_at', now).limit(batch_size).execute()
 
-    if schedule_items.data:
-        pn_map = _fetch_pn_id_map(supabase, schedule_items.data)
-
     for item in schedule_items.data:
         if advance(item['id'], 'pending_ai_gen', expected_stage='pending_schedule'):
             processed += 1
+
+    ai_items = supabase.table('message_queue').select('*').eq(
+        'stage', 'pending_ai_gen'
+    ).limit(batch_size).execute()
+
+    if ai_items.data:
+        with ThreadPoolExecutor(max_workers=AI_WORKERS) as pool:
+            futures = [pool.submit(_generate_ai_text, item) for item in ai_items.data]
+            for f in as_completed(futures):
+                processed += f.result()
 
     ready_items = supabase.table('message_queue').select('*').eq(
         'stage', 'ready_to_send'
@@ -189,16 +171,6 @@ def process_batch(batch_size=20):
                 pn_id = pn_map.get(item.get('business_id'))
                 futures.append(pool.submit(_send_item, item, pn_id))
                 time.sleep(RATE_LIMIT_DELAY)
-            for f in as_completed(futures):
-                processed += f.result()
-
-    ai_items = supabase.table('message_queue').select('*').eq(
-        'stage', 'pending_ai_gen'
-    ).limit(batch_size).execute()
-
-    if ai_items.data:
-        with ThreadPoolExecutor(max_workers=AI_WORKERS) as pool:
-            futures = [pool.submit(_generate_ai_text, item) for item in ai_items.data]
             for f in as_completed(futures):
                 processed += f.result()
 

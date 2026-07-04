@@ -116,7 +116,7 @@ def get_due_followups(scheduled_date=None):
     due = []
     for row in result.data:
         customer = row.get('customers')
-        if customer and customer.get('status') == 'active':
+        if customer and customer.get('status') not in ('paused', 'completed'):
             due.append((customer, row.get('touch_number'), row.get('id')))
     return due
 

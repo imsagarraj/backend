@@ -130,6 +130,7 @@ def send_welcome_message(customer: dict, biz_id: int, returning: bool = False) -
 
         supabase.table('customers').update({
             'current_sequence_day': 1,
+            'status': 'active',
             'last_contact': datetime.now(timezone.utc).isoformat(),
         }).eq('id', customer['id']).execute()
 
@@ -226,6 +227,7 @@ def create_customer(request: Request, data: CustomerCreate, background_tasks: Ba
 
     if not payload.get('purchase_date'):
         payload['purchase_date'] = datetime.now(timezone.utc).date().isoformat()
+    payload['status'] = 'active'
     result = supabase.table('customers').insert(payload).select().execute()
     if not result.data:
         raise HTTPException(status_code=500, detail="Failed to create customer")
@@ -293,8 +295,22 @@ def resume_customer(customer_id: int, user: AuthUser = Depends(get_current_user)
     return {"status": "resumed"}
 
 
+def _process_csv_followups(customer: dict, biz_id: int):
+    try:
+        business = get_supabase().table('business_profiles').select('*').eq('id', biz_id).execute()
+        if not business.data:
+            return
+        agent = get_active_agent(biz_id)
+        if not agent:
+            return
+        generate_followup_sequence(customer, business.data[0], agent, start_touch=2)
+        logger.info(f"CSV import: generated follow-up sequence for customer {customer['id']}")
+    except Exception as e:
+        logger.warning(f"CSV import: follow-up generation failed for {customer.get('id')}: {e}")
+
+
 @router.post("/customers/import")
-async def import_customers(file: UploadFile = File(...), user: AuthUser = Depends(get_current_user), biz_id: int = Depends(get_user_business_id)):
+async def import_customers(file: UploadFile = File(...), background_tasks: BackgroundTasks = BackgroundTasks(), user: AuthUser = Depends(get_current_user), biz_id: int = Depends(get_user_business_id)):
     if not file.filename or not file.filename.lower().endswith('.csv'):
         raise HTTPException(status_code=400, detail="Only CSV files are allowed")
 
@@ -331,6 +347,7 @@ async def import_customers(file: UploadFile = File(...), user: AuthUser = Depend
             data = validated.model_dump()
             data['user_id'] = user.id
             data['business_id'] = biz_id
+            data['status'] = 'active'
 
             try:
                 existing = supabase.table('customers').select('id,visit_count').eq('phone', phone).eq('business_id', biz_id).execute()
@@ -346,9 +363,13 @@ async def import_customers(file: UploadFile = File(...), user: AuthUser = Depend
                     data['returned_at'] = datetime.now(timezone.utc).isoformat()
                     data['current_sequence_day'] = 0
                 supabase.table('customers').update(data).eq('id', existing.data[0]['id']).execute()
+                cancel_pending_sequences(existing.data[0]['id'])
                 logger.info(f"CSV import: updated returning customer {phone}" + (f" — visit #{new_count}" if new_count else ""))
             else:
-                supabase.table('customers').insert(data).execute()
+                result = supabase.table('customers').insert(data).select('id').execute()
+                if result.data:
+                    customer = result.data[0]
+                    background_tasks.add_task(_process_csv_followups, customer, biz_id)
             imported += 1
         except Exception as e:
             failed += 1
