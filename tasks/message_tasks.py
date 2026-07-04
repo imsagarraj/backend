@@ -77,6 +77,7 @@ def enqueue_daily_sequences():
 
 @celery_app.task
 def process_pipeline_batch():
+    enqueue_daily_sequences()
     processed = process_batch(batch_size=20)
     logger.info(f"Pipeline batch processed {processed} items")
     return {'processed': processed}
