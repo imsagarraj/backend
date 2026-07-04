@@ -136,10 +136,35 @@ def _generate_ai_text(item):
         return 0
 
 
+def _enqueue_due_sequences():
+    supabase = get_supabase()
+    from services.followup_service import get_due_followups
+    due = get_due_followups()
+    if not due:
+        return 0
+    biz_ids = list(set(c.get('business_id') for c, _, _ in due if c.get('business_id')))
+    biz_map = {}
+    if biz_ids:
+        biz_result = supabase.table('business_profiles').select('id,name,*').in_('id', biz_ids).execute()
+        biz_map = {b['id']: b for b in (biz_result.data or [])}
+    count = 0
+    for customer, touch_number, seq_id in due:
+        biz = biz_map.get(customer.get('business_id'))
+        if not biz:
+            continue
+        enqueue(customer, biz, 'sequence', touch_number, followup_sequence_id=seq_id)
+        count += 1
+    if count:
+        logger.info(f"Self-enqueue: {count} due sequences enqueued")
+    return count
+
+
 def process_batch(batch_size=20):
     supabase = get_supabase()
     now = datetime.now(timezone.utc).isoformat()
     processed = 0
+
+    _enqueue_due_sequences()
 
     schedule_items = supabase.table('message_queue').select('*').eq(
         'stage', 'pending_schedule'
