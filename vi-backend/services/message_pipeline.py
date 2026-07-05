@@ -75,6 +75,9 @@ def _fetch_pn_id_map(supabase, items):
     return {b['id']: b.get('meta_phone_number_id') for b in (biz_profiles.data or [])}
 
 
+TEMPLATE_NAMES = ['hello_world', 'welcome_trigger']
+
+
 def _send_item(item, pn_id):
     supabase = get_supabase()
     try:
@@ -89,15 +92,29 @@ def _send_item(item, pn_id):
 
         text = item.get('ai_generated_text', '')
 
-        send_template_message(phone, 'welcome_trigger', [], phone_number_id=pn_id, language='en_US')
+        sent_template = False
+        for tmpl in TEMPLATE_NAMES:
+            tmpl_result = send_template_message(phone, tmpl, [], phone_number_id=pn_id, language='en_US')
+            if tmpl_result.get('status') == 'success':
+                sent_template = True
+                break
+            logger.warning(f"Template {tmpl} failed for {phone}: {tmpl_result.get('error', 'unknown')}")
+            time.sleep(1)
+
+        if not sent_template:
+            _handle_failure(item, 'No working template found')
+            return 1
+
         time.sleep(3)
 
         result = send_text_message(phone, text, phone_number_id=pn_id)
         if result.get('status') == 'success':
+            msg_id = result.get('message_id', '')
             advance(item['id'], 'sent', {
-                'meta_message_id': result.get('message_id', ''),
+                'meta_message_id': msg_id,
                 'sent_at': datetime.now(timezone.utc).isoformat(),
             }, expected_stage='sending')
+            item['meta_message_id'] = msg_id
             _update_customer_after_send(item)
         else:
             _handle_failure(item, result.get('error', 'Text send failed'))
@@ -145,12 +162,19 @@ def process_batch(batch_size=20):
         'stage', 'pending_schedule'
     ).lte('scheduled_at', now).limit(batch_size).execute()
 
-    if schedule_items.data:
-        pn_map = _fetch_pn_id_map(supabase, schedule_items.data)
-
     for item in schedule_items.data:
         if advance(item['id'], 'pending_ai_gen', expected_stage='pending_schedule'):
             processed += 1
+
+    ai_items = supabase.table('message_queue').select('*').eq(
+        'stage', 'pending_ai_gen'
+    ).limit(batch_size).execute()
+
+    if ai_items.data:
+        with ThreadPoolExecutor(max_workers=AI_WORKERS) as pool:
+            futures = [pool.submit(_generate_ai_text, item) for item in ai_items.data]
+            for f in as_completed(futures):
+                processed += f.result()
 
     ready_items = supabase.table('message_queue').select('*').eq(
         'stage', 'ready_to_send'
@@ -164,16 +188,6 @@ def process_batch(batch_size=20):
                 pn_id = pn_map.get(item.get('business_id'))
                 futures.append(pool.submit(_send_item, item, pn_id))
                 time.sleep(RATE_LIMIT_DELAY)
-            for f in as_completed(futures):
-                processed += f.result()
-
-    ai_items = supabase.table('message_queue').select('*').eq(
-        'stage', 'pending_ai_gen'
-    ).limit(batch_size).execute()
-
-    if ai_items.data:
-        with ThreadPoolExecutor(max_workers=AI_WORKERS) as pool:
-            futures = [pool.submit(_generate_ai_text, item) for item in ai_items.data]
             for f in as_completed(futures):
                 processed += f.result()
 
@@ -287,19 +301,38 @@ def get_business_pipeline(business_id, limit=50):
 def _update_customer_after_send(item):
     supabase = get_supabase()
     now = datetime.now(timezone.utc).isoformat()
+    customer_id = item.get('customer_id')
+    business_id = item.get('business_id')
+    text = item.get('ai_generated_text', '')
+
+    supabase.table('messages').insert({
+        'customer_id': customer_id,
+        'business_id': business_id,
+        'direction': 'sent',
+        'content': text,
+        'status': 'sent',
+        'meta_message_id': item.get('meta_message_id'),
+        'sequence_day': item.get('sequence_day'),
+    }).execute()
+
+    try:
+        supabase.table('conversation_history').insert({
+            'customer_id': customer_id,
+            'role': 'model',
+            'content': text,
+        }).execute()
+    except Exception as e:
+        logger.warning(f"Failed to insert into conversation_history: {e}")
 
     if item.get('message_type') == 'sequence':
         seq_id = (item.get('payload') or {}).get('followup_sequence_id')
         if seq_id:
             from services.followup_service import complete_followup
             complete_followup(seq_id)
-        supabase.table('customers').update({'last_contact': now}).eq(
-            'id', item.get('customer_id')
-        ).execute()
-    else:
-        supabase.table('customers').update({'last_contact': now}).eq(
-            'id', item.get('customer_id')
-        ).execute()
+
+    supabase.table('customers').update({'last_contact': now}).eq(
+        'id', customer_id
+    ).execute()
 
 
 def _handle_failure(item, error_msg):

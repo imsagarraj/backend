@@ -25,7 +25,7 @@ def _fetch_biz_map(supabase, customers):
     biz_ids = list(set(c.get('business_id') for c in customers if c.get('business_id')))
     if not biz_ids:
         return {}
-    biz_result = supabase.table('business_profiles').select('id,name,*').in_('id', biz_ids).execute()
+    biz_result = supabase.table('business_profiles').select('*').in_('id', biz_ids).execute()
     return {b['id']: b for b in (biz_result.data or [])}
 
 

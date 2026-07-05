@@ -172,6 +172,7 @@ def create_customer(request: Request, data: CustomerCreate, background_tasks: Ba
 
     if not payload.get('purchase_date'):
         payload['purchase_date'] = datetime.now(timezone.utc).date().isoformat()
+    payload['status'] = 'active'
     result = supabase.table('customers').insert(payload).select().execute()
     if not result.data:
         raise HTTPException(status_code=500, detail="Failed to create customer")
@@ -276,6 +277,7 @@ async def import_customers(file: UploadFile = File(...), user: AuthUser = Depend
             data = validated.model_dump()
             data['user_id'] = user.id
             data['business_id'] = biz_id
+            data['status'] = 'active'
             supabase.table('customers').insert(data).execute()
             imported += 1
         except Exception as e:
