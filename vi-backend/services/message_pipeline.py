@@ -105,7 +105,7 @@ def _send_item(item, pn_id):
             _handle_failure(item, 'No working template found')
             return 1
 
-        time.sleep(3)
+        time.sleep(10)
 
         result = send_text_message(phone, text, phone_number_id=pn_id)
         if result.get('status') == 'success':
