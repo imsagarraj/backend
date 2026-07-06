@@ -87,7 +87,7 @@ def send_welcome_message(customer: dict, biz_id: int, returning: bool = False) -
 
         send_template_message(
             customer['phone'],
-            'welcome_trigger',
+            'welcome__trigger',
             [],
             phone_number_id=pn_id,
             language='en_US',
