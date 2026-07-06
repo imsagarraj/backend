@@ -85,10 +85,12 @@ def send_welcome_message(customer: dict, biz_id: int, returning: bool = False) -
         if not pn_id:
             return {"status": "skipped", "reason": "WhatsApp not configured (no meta_phone_number_id). Save your WhatsApp number in Business Profile first."}
 
+        cname = customer.get('name', 'there')
+        cprod = customer.get('product', 'your visit')
         send_template_message(
             customer['phone'],
-            'welcome__trigger',
-            [],
+            'follow_up',
+            [cname, cprod],
             phone_number_id=pn_id,
             language='en_US',
         )
