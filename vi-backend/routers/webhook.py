@@ -6,6 +6,7 @@ import hmac
 import hashlib
 import logging
 import asyncio
+import random
 from pydantic import BaseModel, Field
 from typing import Optional
 
@@ -14,6 +15,7 @@ from database.supabase_client import get_supabase
 from database.seed import get_active_agent
 from services.whatsapp_service import send_text_message, send_read_and_typing
 from services.deepseek_service import generate_reply, detect_personality, extract_notes_from_conversation
+from services.engine import classify_emotion, detect_stop_signal
 from datetime import datetime, timedelta, timezone
 
 _TZ_OFFSET = os.getenv('TIMEZONE_OFFSET', '+05:30')
@@ -147,6 +149,16 @@ async def receive_webhook(request: Request):
 def _clean_phone(phone):
     return phone.replace('+', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '').replace('whatsapp:', '')
 
+
+_STOP_REPLIES = [
+    "You're welcome! 😊",
+    "Anytime! ❤️",
+    "Happy to help! 😊",
+    "Glad I could help! Take care! 😊",
+    "You're most welcome! Have a great day! 😊",
+]
+
+
 async def handle_incoming_message(phone, message_text, message_id, pn_id=''):
     supabase = get_supabase()
     try:
@@ -199,14 +211,42 @@ async def handle_incoming_message(phone, message_text, message_id, pn_id=''):
 
         response_count = (customer.get('response_count') or 0) + 1
         personality = detect_personality(message_text)
+        emotion = classify_emotion(message_text)
         now_local = datetime.now(timezone.utc) + TZ_DELTA
         reply_hour = f"{now_local.hour:02d}:00"
-        supabase.table('customers').update({
+        update_fields = {
             'response_count': response_count,
             'last_contact': datetime.now(timezone.utc).isoformat(),
             'personality_profile': personality,
             'best_contact_time': reply_hour,
-        }).eq('id', customer['id']).execute()
+        }
+        update_fields['sentiment_trend'] = emotion
+        try:
+            supabase.table('customers').update(update_fields).eq('id', customer['id']).execute()
+        except Exception:
+            update_fields.pop('sentiment_trend', None)
+            supabase.table('customers').update(update_fields).eq('id', customer['id']).execute()
+
+        is_stop = detect_stop_signal(message_text)
+        if is_stop:
+            reply = random.choice(_STOP_REPLIES)
+            pn_id = business.get('meta_phone_number_id')
+            await asyncio.sleep(random.uniform(2, 6))
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, send_text_message, phone, reply, pn_id)
+            supabase.table('messages').insert({
+                'customer_id': customer['id'],
+                'business_id': biz_id,
+                'direction': 'sent',
+                'content': reply,
+                'status': 'sent',
+            }).execute()
+            supabase.table('conversation_history').insert({
+                'customer_id': customer['id'],
+                'role': 'model',
+                'content': reply,
+            }).execute()
+            return
 
         history = supabase.table('conversation_history').select('*').eq(
             'customer_id', customer['id']
@@ -222,6 +262,9 @@ async def handle_incoming_message(phone, message_text, message_id, pn_id=''):
         await loop.run_in_executor(None, send_read_and_typing, phone, message_id, pn_id)
 
         reply = await generate_reply(customer, business, agent, message_text, history.data, supabase)
+
+        delay = random.uniform(5, 30)
+        await asyncio.sleep(delay)
 
         send_result = await loop.run_in_executor(None, send_text_message, phone, reply, pn_id)
 
