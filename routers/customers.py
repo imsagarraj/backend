@@ -92,7 +92,7 @@ def send_welcome_message(customer: dict, biz_id: int, returning: bool = False) -
             'follow_up',
             [cname, cprod],
             phone_number_id=pn_id,
-            language='en_US',
+            language='en',
         )
 
         try:
