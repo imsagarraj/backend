@@ -72,6 +72,18 @@ def get_dashboard(user: AuthUser = Depends(get_current_user)):
                 "timestamp": m.get('timestamp')
             })
 
+    thirty_days_ago = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    month_msgs = supabase.table('messages').select('timestamp,direction').eq(
+        'business_id', business_id
+    ).gte('timestamp', thirty_days_ago).order('timestamp').limit(10000).execute()
+
+    messages_per_day = {}
+    for m in (month_msgs.data or []):
+        day = m['timestamp'][:10] if m.get('timestamp') else 'unknown'
+        if day not in messages_per_day:
+            messages_per_day[day] = {'date': day, 'sent': 0, 'received': 0}
+        messages_per_day[day][m['direction']] += 1
+
     pipeline = get_status(business_id)
 
     schedule_list = []
@@ -116,6 +128,7 @@ def get_dashboard(user: AuthUser = Depends(get_current_user)):
             "active_customers": active_customers.count if hasattr(active_customers, 'count') else len(active_customers.data),
             "completed_customers": completed_customers.count if hasattr(completed_customers, 'count') else len(completed_customers.data)
         },
+        "messages_per_day": sorted(messages_per_day.values(), key=lambda x: x['date']),
         "recent_activity": activity_list,
         "todays_schedule": schedule_list,
         "agent": agent_info,

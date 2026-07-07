@@ -69,32 +69,32 @@ function MiniBar({ value = 0.6 }) {
   )
 }
 
-function generateTimeSeries(stats, days) {
-  const baseSent = (stats?.today_sent || 45) / (days === 7 ? 1 : 30) * days
-  const baseReceived = (stats?.today_replies || 28) / (days === 7 ? 1 : 30) * days
+function buildTimeSeries(messagesPerDay, days) {
+  if (!messagesPerDay || messagesPerDay.length === 0) {
+    return []
+  }
   const now = new Date()
   const data = []
   for (let i = 0; i < days; i++) {
     const date = new Date(now)
     date.setDate(date.getDate() - (days - 1 - i))
-    const trend = Math.sin((i / days) * Math.PI * 1.6) * 0.18 + 1
-    const sent = Math.max(3, Math.round((baseSent / days) * trend * (0.8 + Math.random() * 0.4)))
-    const received = Math.max(1, Math.round((baseReceived / days) * trend * (0.6 + Math.random() * 0.6)))
+    const dateStr = date.toISOString().slice(0, 10)
+    const found = messagesPerDay.find(d => d.date === dateStr)
     data.push({
       date,
       label: date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
-      sent,
-      received,
+      sent: found?.sent || 0,
+      received: found?.received || 0,
     })
   }
   return data
 }
 
-function EngagementChart({ stats }) {
+function EngagementChart({ messagesPerDay, stats }) {
   const [range, setRange] = useState('7d')
   const [tooltip, setTooltip] = useState(null)
   const days = range === '7d' ? 7 : range === '30d' ? 30 : 90
-  const data = useMemo(() => generateTimeSeries(stats, days), [stats, days])
+  const data = useMemo(() => buildTimeSeries(messagesPerDay, days), [messagesPerDay, days])
 
   const margin = { top: 8, right: 16, bottom: 28, left: 38 }
   const svgW = 600; const svgH = 200
@@ -309,6 +309,7 @@ export default function Dashboard() {
   const displayName = business?.owner_name || business?.business_name || 'User'
   const hasData = customers.length > 0
   const stats = dashboardData?.stats
+  const messagesPerDay = dashboardData?.messages_per_day || []
   const activity = dashboardData?.recent_activity || []
   const schedule = dashboardData?.todays_schedule || []
   const pipeline = dashboardData?.pipeline || {}
@@ -384,7 +385,7 @@ export default function Dashboard() {
       </motion.div>
 
       <motion.div className={styles.chartRow} variants={sectionVariants} custom={2}>
-        <EngagementChart stats={stats} />
+        <EngagementChart messagesPerDay={messagesPerDay} stats={stats} />
 
         <div className={styles.sidePanel}>
           <div className={styles.panelCard}>
