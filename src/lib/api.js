@@ -38,6 +38,10 @@ export function getAnalytics(period = '30d') {
   return request(`/analytics?period=${period}`)
 }
 
+export function getInsights() {
+  return request('/insights')
+}
+
 export function listAgents() {
   return request('/agents')
 }

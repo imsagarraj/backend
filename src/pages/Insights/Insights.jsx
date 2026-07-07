@@ -1,223 +1,219 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
-} from 'recharts'
-import { useApp } from '../../context/AppContext'
-import { getAnalytics } from '../../lib/api'
-import { SkeletonCard, SkeletonChart } from '../../components/Skeleton/Skeleton'
+import { getInsights } from '../../lib/api'
 import styles from './Insights.module.css'
 
-const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const dayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-
-function buildDayData(messagesPerDay) {
-  const totals = { Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0, Sun: 0 }
-  if (messagesPerDay?.length) {
-    messagesPerDay.forEach(d => {
-      const day = dayNames[new Date(d.date).getDay()]
-      totals[day] += d.received || 0
-    })
-  }
-  return dayOrder.map(day => ({ day, responses: totals[day] }))
+const sectionVariants = {
+  hidden: { opacity: 0, y: 16 },
+  visible: (i = 0) => ({
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: i * 0.08 },
+  }),
 }
 
-function buildFeedbackData(messagesPerDay, period) {
-  if (!messagesPerDay?.length) return []
-  if (period === '90') {
-    const weeks = []
-    let buf = { label: '', received: 0, days: 0 }
-    messagesPerDay.forEach((d, i) => {
-      const dt = new Date(d.date)
-      if (i === 0 || dt.getDay() === 0) {
-        if (buf.days > 0) weeks.push(buf)
-        buf = { label: dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }), received: 0, days: 0 }
-      }
-      buf.received += d.received || 0
-      buf.days++
-    })
-    if (buf.days > 0) weeks.push(buf)
-    return weeks
-  }
-  return messagesPerDay.map(d => ({
-    date: new Date(d.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
-    received: d.received || 0,
-  }))
+const defaultAppreciate = [
+  'Friendly Staff',
+  'Product Quality',
+  'Fast Service',
+  'Smooth Delivery',
+]
+
+const emotionIcons = {
+  'customer_satisfaction': '😊',
+  'returning_customers_pct': '🔁',
+  'reviews_collected': '⭐',
+  'customers_at_risk': '⚠️',
 }
 
 export default function Insights() {
-  const { business } = useApp()
-  const [range, setRange] = useState('30')
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
-
-  const periodMap = { '7': '7d', '30': '30d', '90': '90d' }
+  const [error, setError] = useState(null)
 
   useEffect(() => {
-    if (!business?.id) return
     setLoading(true)
-    getAnalytics(periodMap[range] || '30d')
+    setError(null)
+    getInsights()
       .then(setData)
-      .catch(() => setData(null))
+      .catch((err) => {
+        console.error('Failed to load insights:', err)
+        setError(err.message)
+      })
       .finally(() => setLoading(false))
-  }, [business?.id, range])
+  }, [])
 
-  const dayData = useMemo(() => buildDayData(data?.messages_per_day), [data])
-  const feedbackData = useMemo(() => buildFeedbackData(data?.messages_per_day, range), [data, range])
-  const bestDay = useMemo(() => {
-    if (!dayData.length) return null
-    return dayData.reduce((a, b) => a.responses > b.responses ? a : b)
-  }, [dayData])
-  const empty = !loading && (!data || data.total_customers === 0)
-
-  const sectionVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: (i = 0) => ({
-      opacity: 1, y: 0,
-      transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: i * 0.08 }
-    })
+  if (loading) {
+    return (
+      <div>
+        <div className={styles.pageTitle}>AI Business Insights</div>
+        <div className={styles.pageSubtitle}>Analyzing your customer data...</div>
+        <div className={styles.healthRow}>
+          {[1, 2, 3, 4, 5].map(i => (
+            <div key={i} className={styles.healthCard} style={{ opacity: 0.5, minHeight: 100 }} />
+          ))}
+        </div>
+      </div>
+    )
   }
 
-  const fbLabel = range === '90' ? 'week' : 'date'
+  if (error) {
+    return (
+      <div>
+        <div className={styles.pageTitle}>AI Business Insights</div>
+        <div className={styles.pageSubtitle}>What your customers are saying, feeling, and expecting — all in one place.</div>
+        <div className={styles.healthCard} style={{ padding: 40, textAlign: 'center', marginTop: 20 }}>
+          <div style={{ fontSize: '2rem', marginBottom: 12 }}>📊</div>
+          <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
+            Unable to load insights right now. Please try again later.
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!data) {
+    return (
+      <div>
+        <div className={styles.pageTitle}>AI Business Insights</div>
+        <div className={styles.pageSubtitle}>What your customers are saying, feeling, and expecting — all in one place.</div>
+        <div className={styles.healthCard} style={{ padding: 40, textAlign: 'center', marginTop: 20 }}>
+          <div style={{ fontSize: '2rem', marginBottom: 12 }}>📊</div>
+          <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
+            Not enough data yet. Insights will appear once you have customer interactions.
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const { health, top_issues, appreciate, feedback } = data
+  const healthItems = [
+    { key: 'customer_satisfaction', value: `${health.customer_satisfaction}%`, label: 'Customer Satisfaction' },
+    { key: 'returning_customers_pct', value: `${health.returning_customers_pct}%`, label: 'Returning Customers' },
+    { key: 'reviews_collected', value: String(health.reviews_collected), label: 'Reviews Collected' },
+    { key: 'customers_at_risk', value: String(health.customers_at_risk), label: 'Customers At Risk' },
+  ]
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
-      <motion.div variants={sectionVariants} custom={0} initial="hidden" animate="visible">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-          <div>
-            <div className={styles.pageTitle}>Insights</div>
-            <div className={styles.pageSubtitle}>Understand how your customers are engaging</div>
-          </div>
-        </div>
+      <div className={styles.pageTitle}>AI Business Insights</div>
+      <div className={styles.pageSubtitle}>What your customers are saying, feeling, and expecting — all in one place.</div>
 
-        <div className={styles.dateRange}>
-          {[
-            { label: '7 days', value: '7' },
-            { label: '30 days', value: '30' },
-            { label: '3 months', value: '90' },
-          ].map(d => (
-            <button key={d.value} className={`${styles.dateBtn} ${range === d.value ? styles.dateActive : ''}`} onClick={() => setRange(d.value)}>
-              {d.label}
-            </button>
+      {healthItems.some(h => h.value !== '0%' && h.value !== '0') && (
+        <motion.div variants={sectionVariants} custom={0} initial="hidden" animate="visible" className={styles.section}>
+          <div className={styles.sectionHeader}>Overall Customer Health</div>
+          <div className={styles.healthRow}>
+            {healthItems.map((h, i) => (
+              <div key={i} className={styles.healthCard}>
+                <div className={styles.healthIcon}>{emotionIcons[h.key]}</div>
+                <div className={styles.healthValue}>{h.value}</div>
+                <div className={styles.healthLabel}>{h.label}</div>
+              </div>
+            ))}
+            <div className={styles.healthCardAlert}>
+              <div className={styles.healthAlertLabel}>Needs Your Attention</div>
+              <div className={styles.healthAlertIcon}>🚨</div>
+              <div className={styles.healthAlertText}>
+                {health.not_returned_after_negative > 0
+                  ? `${health.not_returned_after_negative} customers didn't return after negative feedback`
+                  : health.customers_at_risk > 0
+                    ? `${health.customers_at_risk} customers at risk`
+                    : 'All customers are healthy'}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {top_issues.length > 0 && (
+        <>
+          <motion.div variants={sectionVariants} custom={1} initial="hidden" animate="visible" className={styles.section}>
+            <div className={styles.sectionHeader}>
+              <span>❗</span> The {top_issues.length} most important issues right now
+            </div>
+            <div className={styles.sectionNote}>This is what the owner should see first.</div>
+            <div className={styles.issuesGrid}>
+              {top_issues.map((issue, i) => (
+                <div key={i} className={styles.issueCard}>
+                  <div className={styles.issueIcon}>{issue.icon}</div>
+                  <div className={styles.issueTitle}>{issue.title}</div>
+                  <div className={styles.issueDesc}>{issue.desc}</div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        </>
+      )}
+
+      <motion.div variants={sectionVariants} custom={2} initial="hidden" animate="visible" className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <span>❤️</span> Customers Appreciate
+        </div>
+        <div className={styles.sectionNote}>This helps businesses know what not to change.</div>
+        <div className={styles.appreciateRow}>
+          {(appreciate.length > 0 ? appreciate : defaultAppreciate).map((item, i) => (
+            <div key={i} className={styles.appreciateTag}>
+              <span>❤️</span> {item}
+            </div>
           ))}
         </div>
       </motion.div>
 
-      {loading ? (
-        <motion.div variants={sectionVariants} custom={1} initial="hidden" animate="visible">
-          <div className={styles.statsGrid}>
-            <SkeletonCard height={80} /><SkeletonCard height={80} /><SkeletonCard height={80} /><SkeletonCard height={80} />
+      {(feedback.complaints.length > 0 || feedback.suggestions.length > 0 || feedback.praise.length > 0) && (
+        <motion.div variants={sectionVariants} custom={3} initial="hidden" animate="visible" className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <span>💬</span> Most Common Feedback
           </div>
-          <div className={styles.insightGrid}>
-            <SkeletonChart height={280} /><SkeletonChart height={280} />
-            <SkeletonChart height={280} /><SkeletonChart height={280} />
-          </div>
-        </motion.div>
-      ) : empty ? (
-        <motion.div variants={sectionVariants} custom={1} initial="hidden" animate="visible" className={`${styles.chartCard} ${styles.emptyState}`}>
-          <div className={styles.emptyIcon}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 3v18h18M7 16l4-4 4 4 5-5M7 12l4-4 4 4 5-5"/></svg>
-          </div>
-          <div className={styles.emptyTitle}>Not enough data yet</div>
-          <div className={styles.emptySubtitle}>Insights will appear once Vi sends your first 10 messages</div>
-        </motion.div>
-      ) : (
-        <>
-          <motion.div className={styles.statsGrid} variants={sectionVariants} custom={1} initial="hidden" animate="visible">
-            <div className={styles.statCard}>
-              <div className={styles.statNumber}>{data.total_customers}</div>
-              <div className={styles.statLabel}>Total Customers</div>
-            </div>
-            <div className={styles.statCard}>
-              <div className={styles.statNumber}>{data.messages_received}</div>
-              <div className={styles.statLabel}>Responses Received</div>
-            </div>
-            <div className={styles.statCard}>
-              <div className={styles.statNumber}>{bestDay?.responses > 0 ? `${bestDay.day} (${bestDay.responses})` : '—'}</div>
-              <div className={styles.statLabel}>Best Response Day</div>
-            </div>
-            <div className={styles.statCard}>
-              <div className={styles.statNumber}>{data.response_rate}%</div>
-              <div className={styles.statLabel}>Response Rate</div>
-            </div>
-          </motion.div>
-
-          <motion.div className={styles.insightGrid} variants={sectionVariants} custom={2} initial="hidden" animate="visible">
-            <div className={styles.chartCard}>
-              <div className={styles.chartTitle}>Best Time to Respond</div>
-              <div className={styles.chartSub}>Responses received by day of week</div>
-              <div style={{ height: 200 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dayData} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-softer)" vertical={false} />
-                    <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }} domain={[0, 'auto']} />
-                    <Tooltip
-                      contentStyle={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border)', borderRadius: 8, color: 'var(--color-text)', fontSize: 13 }}
-                      labelStyle={{ color: 'var(--color-text-muted)', fontSize: 11, marginBottom: 2 }}
-                      formatter={(v) => [`${v} responses`, 'Received']}
-                    />
-                    <Bar dataKey="responses" radius={[4, 4, 0, 0]} maxBarSize={36}>
-                      {dayData.map((d, i) => (
-                        <Cell key={i} fill={d.day === bestDay?.day && bestDay.responses > 0 ? 'var(--color-accent)' : 'var(--color-accent-dim)'} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+          <div className={styles.feedbackGrid}>
+            <div className={styles.feedbackCard}>
+              <div className={styles.feedbackCardTitle}>
+                <span>😤</span> Complaints
               </div>
-              {bestDay?.responses > 0 && (
-                <div className={styles.insightNote}>
-                  Peak responses on <strong className={styles.insightHighlight}>{bestDay.day}</strong> — best day to schedule campaigns
+              {feedback.complaints.map((item, i) => (
+                <div key={i} className={`${styles.feedbackItem} ${styles.feedbackItemComplaint}`}>
+                  <span className={styles.feedbackLabel}>{item.label}</span>
+                  <span className={styles.feedbackCount}>({item.count})</span>
+                </div>
+              ))}
+              {feedback.complaints.length === 0 && (
+                <div className={styles.feedbackItem}>
+                  <span className={styles.feedbackLabel} style={{ color: 'var(--color-text-muted)' }}>No complaints recorded</span>
                 </div>
               )}
             </div>
-
-            <div className={styles.chartCard}>
-              <div className={styles.chartTitle}>Feedback Overview</div>
-              <div className={styles.chartSub}>Customer responses received over time</div>
-              <div style={{ height: 200 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={feedbackData} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-softer)" vertical={false} />
-                    <XAxis dataKey={fbLabel} axisLine={false} tickLine={false} tick={{ fill: 'var(--color-text-muted)', fontSize: 9 }} interval="preserveStartEnd" />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }} domain={[0, 'auto']} />
-                    <Tooltip
-                      contentStyle={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border)', borderRadius: 8, color: 'var(--color-text)', fontSize: 13 }}
-                      labelStyle={{ color: 'var(--color-text-muted)', fontSize: 11, marginBottom: 2 }}
-                      formatter={(v) => [`${v} responses`, 'Received']}
-                    />
-                    <Bar dataKey="received" fill="var(--color-accent)" radius={[2, 2, 0, 0]} maxBarSize={range === '90' ? 24 : 16} />
-                  </BarChart>
-                </ResponsiveContainer>
+            <div className={styles.feedbackCard}>
+              <div className={styles.feedbackCardTitle}>
+                <span>💡</span> Suggestions
               </div>
-              <div className={styles.insightNote}>
-                Response rate: <strong className={styles.insightHighlight}>{data.response_rate}%</strong> across {data.responding_customers} of {data.messaged_customers} contacted customers
-              </div>
+              {feedback.suggestions.map((item, i) => (
+                <div key={i} className={styles.feedbackItem}>
+                  <span className={styles.feedbackLabel}>{item}</span>
+                </div>
+              ))}
+              {feedback.suggestions.length === 0 && (
+                <div className={styles.feedbackItem}>
+                  <span className={styles.feedbackLabel} style={{ color: 'var(--color-text-muted)' }}>No suggestions yet</span>
+                </div>
+              )}
             </div>
-
-            <div className={`${styles.chartCard} ${styles.placeholderCard}`}>
-              <div className={styles.placeholderIcon}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M1 12s2-6 11-6 11 6 11 6-2 6-11 6-11-6-11-6z" /><circle cx="12" cy="12" r="3" />
-                </svg>
+            <div className={styles.feedbackCard}>
+              <div className={styles.feedbackCardTitle}>
+                <span>⭐</span> Praise
               </div>
-              <div className={styles.placeholderTitle}>Customer Returning</div>
-              <div className={styles.placeholderSub}>Track repeat customer engagement after first interaction</div>
-              <div className={styles.placeholderBadge}>Coming soon</div>
+              {feedback.praise.map((item, i) => (
+                <div key={i} className={`${styles.feedbackItem} ${styles.feedbackItemPraise}`}>
+                  <span className={styles.feedbackLabel}>{item}</span>
+                </div>
+              ))}
+              {feedback.praise.length === 0 && (
+                <div className={styles.feedbackItem}>
+                  <span className={styles.feedbackLabel} style={{ color: 'var(--color-text-muted)' }}>No praise yet</span>
+                </div>
+              )}
             </div>
-
-            <div className={`${styles.chartCard} ${styles.placeholderCard}`}>
-              <div className={styles.placeholderIcon}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                </svg>
-              </div>
-              <div className={styles.placeholderTitle}>Revenue from Returning</div>
-              <div className={styles.placeholderSub}>Revenue generated by repeat customers over time</div>
-              <div className={styles.placeholderBadge}>Coming soon</div>
-            </div>
-          </motion.div>
-        </>
+          </div>
+        </motion.div>
       )}
     </motion.div>
   )
