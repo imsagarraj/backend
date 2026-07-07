@@ -12,18 +12,11 @@ const sectionVariants = {
   }),
 }
 
-const defaultAppreciate = [
-  'Friendly Staff',
-  'Product Quality',
-  'Fast Service',
-  'Smooth Delivery',
-]
-
 const emotionIcons = {
-  'customer_satisfaction': '😊',
-  'returning_customers_pct': '🔁',
-  'reviews_collected': '⭐',
-  'customers_at_risk': '⚠️',
+  customer_satisfaction: '😊',
+  returning_customers_pct: '🔁',
+  reviews_collected: '⭐',
+  customers_at_risk: '⚠️',
 }
 
 export default function Insights() {
@@ -47,7 +40,7 @@ export default function Insights() {
     return (
       <div>
         <div className={styles.pageTitle}>AI Business Insights</div>
-        <div className={styles.pageSubtitle}>Analyzing your customer data...</div>
+        <div className={styles.pageSubtitle}>Analyzing your customer conversations...</div>
         <div className={styles.healthRow}>
           {[1, 2, 3, 4, 5].map(i => (
             <div key={i} className={styles.healthCard} style={{ opacity: 0.5, minHeight: 100 }} />
@@ -61,7 +54,7 @@ export default function Insights() {
     return (
       <div>
         <div className={styles.pageTitle}>AI Business Insights</div>
-        <div className={styles.pageSubtitle}>What your customers are saying, feeling, and expecting — all in one place.</div>
+        <div className={styles.pageSubtitle}>What your customers are saying — all in one place.</div>
         <div className={styles.healthCard} style={{ padding: 40, textAlign: 'center', marginTop: 20 }}>
           <div style={{ fontSize: '2rem', marginBottom: 12 }}>📊</div>
           <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
@@ -76,11 +69,11 @@ export default function Insights() {
     return (
       <div>
         <div className={styles.pageTitle}>AI Business Insights</div>
-        <div className={styles.pageSubtitle}>What your customers are saying, feeling, and expecting — all in one place.</div>
+        <div className={styles.pageSubtitle}>What your customers are saying — all in one place.</div>
         <div className={styles.healthCard} style={{ padding: 40, textAlign: 'center', marginTop: 20 }}>
           <div style={{ fontSize: '2rem', marginBottom: 12 }}>📊</div>
           <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
-            Not enough data yet. Insights will appear once you have customer interactions.
+            Not enough data yet. Insights will appear once you have customer conversations.
           </div>
         </div>
       </div>
@@ -88,6 +81,7 @@ export default function Insights() {
   }
 
   const { health, top_issues, appreciate, feedback } = data
+
   const healthItems = [
     { key: 'customer_satisfaction', value: `${health.customer_satisfaction}%`, label: 'Customer Satisfaction' },
     { key: 'returning_customers_pct', value: `${health.returning_customers_pct}%`, label: 'Returning Customers' },
@@ -116,9 +110,9 @@ export default function Insights() {
               <div className={styles.healthAlertIcon}>🚨</div>
               <div className={styles.healthAlertText}>
                 {health.not_returned_after_negative > 0
-                  ? `${health.not_returned_after_negative} customers didn't return after negative feedback`
+                  ? `${health.not_returned_after_negative} customer${health.not_returned_after_negative > 1 ? 's' : ''} didn't return after negative feedback`
                   : health.customers_at_risk > 0
-                    ? `${health.customers_at_risk} customers at risk`
+                    ? `${health.customers_at_risk} customer${health.customers_at_risk > 1 ? 's' : ''} at risk`
                     : 'All customers are healthy'}
               </div>
             </div>
@@ -127,32 +121,37 @@ export default function Insights() {
       )}
 
       {top_issues.length > 0 && (
-        <>
-          <motion.div variants={sectionVariants} custom={1} initial="hidden" animate="visible" className={styles.section}>
-            <div className={styles.sectionHeader}>
-              <span>❗</span> The {top_issues.length} most important issues right now
-            </div>
-            <div className={styles.sectionNote}>This is what the owner should see first.</div>
-            <div className={styles.issuesGrid}>
-              {top_issues.map((issue, i) => (
-                <div key={i} className={styles.issueCard}>
-                  <div className={styles.issueIcon}>{issue.icon}</div>
-                  <div className={styles.issueTitle}>{issue.title}</div>
-                  <div className={styles.issueDesc}>{issue.desc}</div>
+        <motion.div variants={sectionVariants} custom={1} initial="hidden" animate="visible" className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <span>❗</span> The {top_issues.length > 1 ? `${top_issues.length} most important` : 'top'} issue{top_issues.length > 1 ? 's' : ''} right now
+          </div>
+          <div className={styles.sectionNote}>Extracted from your actual customer conversations.</div>
+          <div className={styles.issuesGrid}>
+            {top_issues.map((issue, i) => (
+              <div key={i} className={styles.issueCard}>
+                <div className={styles.issueIcon}>{issue.icon}</div>
+                <div className={styles.issueTitle}>
+                  {issue.label}
+                  <span className={styles.issueCount}>{issue.customer_count} customer{issue.customer_count > 1 ? 's' : ''}</span>
                 </div>
-              ))}
-            </div>
-          </motion.div>
-        </>
+                {issue.example && (
+                  <div className={styles.issueExample}>
+                    &ldquo;{issue.example}&rdquo;
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </motion.div>
       )}
 
       <motion.div variants={sectionVariants} custom={2} initial="hidden" animate="visible" className={styles.section}>
         <div className={styles.sectionHeader}>
           <span>❤️</span> Customers Appreciate
         </div>
-        <div className={styles.sectionNote}>This helps businesses know what not to change.</div>
+        <div className={styles.sectionNote}>What your customers love about your business.</div>
         <div className={styles.appreciateRow}>
-          {(appreciate.length > 0 ? appreciate : defaultAppreciate).map((item, i) => (
+          {(appreciate.length > 0 ? appreciate : ['Friendly Staff', 'Good Service', 'Clean Environment']).map((item, i) => (
             <div key={i} className={styles.appreciateTag}>
               <span>❤️</span> {item}
             </div>

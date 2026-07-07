@@ -4,32 +4,51 @@ from dependencies import get_current_user, AuthUser
 from datetime import datetime, timedelta, timezone
 from pydantic import Field
 from typing import Annotated
+import re
 
 router = APIRouter()
 
 COMPLAINT_KW = [
-    'damage', 'broken', 'crack', 'leak', 'late', 'delay', 'wait', 'waiting',
-    'wasted', 'rude', 'staff', 'behaviour', 'behavior', 'argument', 'shout',
-    'problem', 'issue', 'wrong', 'bad', 'terrible', 'worst', 'poor',
-    'unsatisfied', 'disappointed', 'frustrated', 'annoyed', 'expensive',
-    'overcharge', 'wrong item', 'missing', 'not good', 'not happy',
+    'wait', 'waiting', 'wasted', 'late', 'delay',
+    'rude', 'staff', 'behaviour', 'behavior', 'argument', 'shout', 'yell',
+    'pain', 'hurt', 'bleeding', 'infection', 'swelling', 'uncomfortable',
+    'damage', 'broken', 'crack', 'problem', 'issue', 'wrong', 'error',
+    'bad', 'terrible', 'worst', 'poor', 'horrible', 'awful',
+    'unsatisfied', 'disappointed', 'frustrated', 'annoyed', 'unhappy',
+    'expensive', 'costly', 'overcharge', 'refund', 'money back',
+    'not good', 'not happy', 'never again', 'won\'t return', 'leaving',
+    'dirty', 'unclean', 'hygiene', 'smell',
+    'cancelled', 'reschedule', 'no show', 'missed',
+    'complicated', 'confusing', 'difficult', 'hard to',
 ]
+
 PRAISE_KW = [
-    'friendly', 'amazing', 'excellent', 'great', 'good', 'love', 'best',
-    'happy', 'wonderful', 'fantastic', 'awesome', 'perfect', 'kind',
-    'helpful', 'caring', 'professional', 'smooth', 'quick', 'fast',
-    'comfortable', 'satisfied', 'recommend', 'thank', 'superb',
+    'friendly', 'kind', 'caring', 'helpful', 'professional',
+    'amazing', 'excellent', 'great', 'good', 'love', 'best',
+    'happy', 'wonderful', 'fantastic', 'awesome', 'perfect',
+    'superb', 'smooth', 'quick', 'fast', 'comfortable',
+    'satisfied', 'recommend', 'thank', 'thanks', 'grateful',
+    'clean', 'nice', 'beautiful', 'lovely', 'warm',
+    'gentle', 'patient', 'understanding', 'thorough',
+    'convenient', 'easy', 'simple', 'efficient',
 ]
-SUGGESTION_KW = [
-    'should', 'wish', 'need', 'want', 'suggest', 'recommend', 'improve',
-    'add', 'offer', 'provide', 'introduce', 'option', 'payment',
-    'discount', 'offer', 'loyalty', 'weekend', 'timing', 'availability',
-    'more', 'better if', 'can you', 'could you', 'would be nice',
+
+SUGGESTION_PATTERNS = [
+    r'(?:you|you\'?a?r?e?)\s+(?:should|could|need to|need|must|can)',
+    r'(?:i|we)\s+(?:wish|want|need|would like|hope)',
+    r'(?:how about|what about|why not|would be nice if|better if)',
+    r'(?:suggest|recommend|improve|consider)\s+(?:adding|offering|providing|having)',
+    r'more\s+\w+\s+(?:options|choices|variety)',
+    r'(?:add|offer|provide|introduce)\s+(?:more|a|an)',
+    r'should\s+(?:have|be|offer|provide|add|include)',
+    r'(?:wish|wished)\s+(?:there\s+was|there\s+were|you\s+had|i\s+could)',
 ]
+
 AT_RISK_KW = [
     'not coming', 'won\'t return', 'leaving', 'switch', 'complain',
     'never again', 'refund', 'cancel', 'not happy', 'disappointed',
-    'bad experience', 'unhappy', 'frustrated',
+    'bad experience', 'unhappy', 'frustrated', 'terrible', 'worst',
+    'can\'t take', 'too much', 'done with', 'fed up', 'sick of',
 ]
 
 
@@ -44,185 +63,247 @@ def _keyword_score(text, keywords):
     return sum(1 for kw in keywords if kw in text_lower)
 
 
-def _extract_issues(messages, conv_history, customers):
-    """Extract top issues from conversation data."""
-    issues = {}
+def _extract_snippet(text, keywords, context_words=8):
+    """Extract the most relevant sentence/phrase around complaint keywords."""
+    if not text:
+        return ''
+    text_lower = text.lower()
+    words = text.split()
+    best_idx = -1
+    best_kw = ''
 
-    for msg in (conv_history.data or []) + (messages.data or []):
-        content = msg.get('content') or ''
-        text_lower = content.lower()
+    for kw in keywords:
+        idx = text_lower.find(kw)
+        if idx != -1:
+            # Find which word index this falls on
+            char_count = 0
+            for i, w in enumerate(words):
+                char_count += len(w) + 1
+                if char_count > idx:
+                    best_idx = i
+                    best_kw = kw
+                    break
 
-        # Packaging damage
-        if any(kw in text_lower for kw in ['packaging', 'package', 'packing', 'damage', 'broken', 'crack']):
-            issues['packaging'] = issues.get('packaging', 0) + 1
+    if best_idx == -1:
+        return text[:120]
 
-        # Late delivery
-        if any(kw in text_lower for kw in ['late', 'delay', 'wait', 'waiting', 'delivery']):
-            issues['delivery'] = issues.get('delivery', 0) + 1
+    start = max(0, best_idx - context_words)
+    end = min(len(words), best_idx + context_words)
+    snippet = ' '.join(words[start:end])
+    if start > 0:
+        snippet = '...' + snippet
+    if end < len(words):
+        snippet = snippet + '...'
+    return snippet
 
-        # Staff behaviour
-        if any(kw in text_lower for kw in ['staff', 'rude', 'behaviour', 'behavior', 'argument', 'shout']):
-            issues['staff'] = issues.get('staff', 0) + 1
 
-        # Price
-        if any(kw in text_lower for kw in ['expensive', 'cost', 'price', 'overcharge', 'money']):
-            issues['pricing'] = issues.get('pricing', 0) + 1
+def _extract_issues_dynamic(all_texts):
+    """Extract issues dynamically from actual customer texts.
+    
+    Returns list of { 'label', 'count', 'example', 'customers' }
+    with labels generated from the actual complaint content.
+    """
+    issue_groups = {}
+    customer_issue_map = {}
 
-        # Quality
-        if any(kw in text_lower for kw in ['quality', 'product', 'poor', 'bad', 'worst']):
-            issues['quality'] = issues.get('quality', 0) + 1
+    for item in all_texts:
+        text = item.get('content') or ''
+        cid = item.get('customer_id')
+        cname = item.get('customer_name', f'Customer #{cid}')
+        text_lower = text.lower()
 
-    # Also check customer notes
-    for c in (customers.data or []):
-        notes = (c.get('notes') or '').lower()
-        if not notes:
+        score = _keyword_score(text, COMPLAINT_KW)
+        if score == 0:
             continue
-        if any(kw in notes for kw in ['damage', 'broken', 'packaging', 'package']):
-            issues['packaging'] = issues.get('packaging', 0) + 1
-        if any(kw in notes for kw in ['wait', 'delay', 'late']):
-            issues['delivery'] = issues.get('delivery', 0) + 1
-        if any(kw in notes for kw in ['staff', 'rude', 'behaviour']):
-            issues['staff'] = issues.get('staff', 0) + 1
 
-    return issues
+        snippet = _extract_snippet(text, COMPLAINT_KW)
+        if not snippet or len(snippet.strip()) < 5:
+            continue
+
+        # Determine which keywords matched most strongly
+        matched_kws = [kw for kw in COMPLAINT_KW if kw in text_lower]
+
+        # Generate a label based on the matched keywords
+        label = _generate_issue_label(matched_kws, text)
+
+        if label not in issue_groups:
+            issue_groups[label] = {
+                'label': label,
+                'count': 0,
+                'example': snippet,
+                'customers': set(),
+                'keywords': set(),
+            }
+
+        issue_groups[label]['count'] += 1
+        issue_groups[label]['customers'].add(cid)
+        issue_groups[label]['keywords'].update(matched_kws)
+
+        # Keep the best example (shortest coherent snippet with most keywords)
+        existing = issue_groups[label]['example']
+        if len(snippet) < len(existing) or len(matched_kws) > len(issue_groups[label]['keywords']):
+            issue_groups[label]['example'] = snippet
+
+    # Sort by count descending, take top 5
+    sorted_issues = sorted(issue_groups.values(), key=lambda x: -x['count'])[:5]
+
+    result = []
+    for issue in sorted_issues:
+        result.append({
+            'label': issue['label'],
+            'count': issue['count'],
+            'example': issue['example'],
+            'customer_count': len(issue['customers']),
+        })
+
+    return result
 
 
-def _extract_feedback(messages, conv_history):
-    """Categorize feedback into complaints, suggestions, praise."""
-    seen = set()
-    complaints = {}
+def _generate_issue_label(matched_kws, text):
+    """Generate a human-readable label for an issue based on what the customer said."""
+    text_lower = text.lower()
+
+    # Wait time / delay
+    if any(kw in matched_kws for kw in ['wait', 'waiting', 'wasted', 'late', 'delay']):
+        if 'hour' in text_lower or 'hr' in text_lower or 'minute' in text_lower or 'time' in text_lower:
+            return 'Long Wait Times'
+        return 'Waiting / Delays'
+
+    # Staff behaviour
+    if any(kw in matched_kws for kw in ['rude', 'staff', 'behaviour', 'behavior', 'argument', 'shout', 'yell']):
+        return 'Staff Behaviour'
+
+    # Pain / discomfort (medical/dental specific)
+    if any(kw in matched_kws for kw in ['pain', 'hurt', 'bleeding', 'infection', 'swelling', 'uncomfortable']):
+        if 'pain' in matched_kws:
+            return 'Pain or Discomfort'
+        return 'Health Concerns'
+
+    # Quality issues
+    if any(kw in matched_kws for kw in ['damage', 'broken', 'crack', 'poor', 'terrible', 'worst', 'bad', 'horrible', 'awful']):
+        return 'Poor Quality'
+
+    # Cleanliness
+    if any(kw in matched_kws for kw in ['dirty', 'unclean', 'hygiene', 'smell']):
+        return 'Cleanliness / Hygiene'
+
+    # Pricing
+    if any(kw in matched_kws for kw in ['expensive', 'costly', 'overcharge', 'refund', 'money back']):
+        return 'Pricing Concerns'
+
+    # Cancellation / scheduling
+    if any(kw in matched_kws for kw in ['cancelled', 'reschedule', 'no show', 'missed']):
+        return 'Scheduling Issues'
+
+    # General complaints
+    if any(kw in matched_kws for kw in ['problem', 'issue', 'wrong', 'error']):
+        return 'Service Problems'
+
+    # Disappointment / churn risk
+    if any(kw in matched_kws for kw in ['disappointed', 'frustrated', 'unhappy', 'not happy', 'never again', 'not good']):
+        return 'Customer Dissatisfaction'
+
+    # If nothing specific matched, create label from keywords
+    if matched_kws:
+        return matched_kws[0].capitalize() + ' Related'
+
+    return 'Other Issues'
+
+
+def _extract_praise_dynamic(all_texts):
+    """Extract praised aspects dynamically from customer texts."""
+    praise_groups = {}
+
+    for item in all_texts:
+        text = item.get('content') or ''
+        text_lower = text.lower()
+
+        score = _keyword_score(text, PRAISE_KW)
+        if score == 0:
+            continue
+
+        matched_kws = [kw for kw in PRAISE_KW if kw in text_lower]
+        label = _generate_praise_label(matched_kws, text)
+
+        if label not in praise_groups:
+            praise_groups[label] = {'count': 0}
+
+        praise_groups[label]['count'] += 1
+
+    sorted_praise = sorted(praise_groups.items(), key=lambda x: -x[1]['count'])[:4]
+    return [item[0] for item in sorted_praise]
+
+
+def _generate_praise_label(matched_kws, text):
+    text_lower = text.lower()
+
+    if any(kw in matched_kws for kw in ['friendly', 'kind', 'caring', 'helpful', 'professional', 'gentle', 'patient', 'understanding']):
+        return 'Friendly Staff'
+    if any(kw in matched_kws for kw in ['great', 'excellent', 'amazing', 'perfect', 'superb', 'fantastic', 'awesome', 'wonderful', 'lovely']):
+        return 'Excellent Quality'
+    if any(kw in matched_kws for kw in ['quick', 'fast', 'smooth', 'efficient', 'convenient', 'easy']):
+        return 'Fast Service'
+    if any(kw in matched_kws for kw in ['clean', 'nice', 'beautiful', 'warm', 'comfortable']):
+        return 'Clean & Comfortable'
+    if any(kw in matched_kws for kw in ['satisfied', 'happy', 'love', 'best']):
+        return 'Great Experience'
+    if any(kw in matched_kws for kw in ['recommend', 'thank', 'thanks', 'grateful']):
+        return 'Would Recommend'
+    if matched_kws:
+        return matched_kws[0].capitalize()
+    return 'Other'
+
+
+def _extract_suggestions_dynamic(all_texts):
+    """Extract suggestions from customer texts using regex patterns."""
     suggestions = {}
-    praise_items = {}
 
-    for msg in (conv_history.data or []) + (messages.data or []):
-        content = msg.get('content') or ''
-        if not content.strip():
+    for item in all_texts:
+        text = item.get('content') or ''
+        if not text.strip():
             continue
 
-        text_lower = content.lower()
-        key = content.strip()[:80]
+        text_lower = text.lower()
 
-        # Avoid counting the same message twice
-        if key in seen:
-            continue
-        seen.add(key)
+        for pattern in SUGGESTION_PATTERNS:
+            if re.search(pattern, text_lower):
+                # Extract the main subject of the suggestion
+                snippet = _extract_suggestion_topic(text)
+                if snippet:
+                    suggestions[snippet] = suggestions.get(snippet, 0) + 1
+                break
 
-        complaint_score = _keyword_score(content, COMPLAINT_KW)
-        praise_score = _keyword_score(content, PRAISE_KW)
-        suggestion_score = _keyword_score(content, SUGGESTION_KW)
-
-        # Determine dominant category
-        if complaint_score > praise_score and complaint_score > suggestion_score:
-            for kw in COMPLAINT_KW:
-                if kw in text_lower:
-                    label = _categorize_complaint(kw)
-                    complaints[label] = complaints.get(label, 0) + 1
-                    break
-
-        if praise_score > complaint_score and praise_score >= suggestion_score:
-            for kw in PRAISE_KW:
-                if kw in text_lower:
-                    label = _categorize_praise(kw)
-                    praise_items[label] = praise_items.get(label, 0) + 1
-                    break
-
-        if suggestion_score > complaint_score and suggestion_score >= praise_score:
-            for kw in SUGGESTION_KW:
-                if kw in text_lower:
-                    label = _categorize_suggestion(kw)
-                    suggestions[label] = suggestions.get(label, 0) + 1
-                    break
-
-    # Sort by frequency
-    complaints_sorted = sorted(complaints.items(), key=lambda x: -x[1])[:3]
-    suggestions_sorted = sorted(suggestions.items(), key=lambda x: -x[1])[:3]
-    praise_sorted = sorted(praise_items.items(), key=lambda x: -x[1])[:3]
-
-    return {
-        'complaints': [{'label': k, 'count': v} for k, v in complaints_sorted],
-        'suggestions': [{'label': k} for k, v in suggestions_sorted],
-        'praise': [{'label': k} for k, v in praise_sorted],
-    }
+    sorted_suggestions = sorted(suggestions.items(), key=lambda x: -x[1])[:3]
+    return [s[0] for s in sorted_suggestions]
 
 
-def _categorize_complaint(kw):
-    mapping = {
-        'damage': 'Packaging Damage',
-        'broken': 'Packaging Damage',
-        'crack': 'Packaging Damage',
-        'leak': 'Packaging Damage',
-        'packaging': 'Packaging Damage',
-        'package': 'Packaging Damage',
-        'packing': 'Packaging Damage',
-        'late': 'Late Delivery',
-        'delay': 'Late Delivery',
-        'delivery': 'Late Delivery',
-        'wait': 'Long Wait Time',
-        'waiting': 'Long Wait Time',
-        'wasted': 'Long Wait Time',
-        'rude': 'Staff Behaviour',
-        'staff': 'Staff Behaviour',
-        'behaviour': 'Staff Behaviour',
-        'behavior': 'Staff Behaviour',
-        'argument': 'Staff Behaviour',
-        'shout': 'Staff Behaviour',
-        'expensive': 'Pricing',
-        'overcharge': 'Pricing',
-        'problem': 'Service Issue',
-        'issue': 'Service Issue',
-        'wrong': 'Service Issue',
-    }
-    return mapping.get(kw, 'Other Complaint')
+def _extract_suggestion_topic(text):
+    """Extract the key topic from a suggestion sentence."""
+    text_lower = text.lower()
 
+    topics = [
+        (['payment', 'credit', 'debit', 'card', 'cash', 'upi', 'online'], 'More Payment Options'),
+        (['loyalty', 'reward', 'points', 'discount', 'offer', 'coupon'], 'Loyalty Program'),
+        (['weekend', 'sunday', 'saturday', 'holiday', 'evening', 'after hours'], 'Weekend / Extended Hours'),
+        (['appointment', 'booking', 'schedule', 'slot', 'availability'], 'Easier Booking'),
+        (['home', 'delivery', 'doorstep', 'online', 'website', 'app'], 'Online Services'),
+        (['parking', 'location', 'reach', 'access', 'transport'], 'Better Location / Parking'),
+        (['wait', 'waiting', 'queue', 'line', 'faster', 'speed'], 'Reduce Waiting Time'),
+        (['more', 'variety', 'choice', 'range', 'selection'], 'More Options'),
+        (['inform', 'remind', 'reminder', 'notification', 'update'], 'Better Communication'),
+    ]
 
-def _categorize_praise(kw):
-    mapping = {
-        'friendly': 'Friendly Staff',
-        'kind': 'Friendly Staff',
-        'caring': 'Friendly Staff',
-        'helpful': 'Friendly Staff',
-        'great': 'Excellent Quality',
-        'excellent': 'Excellent Quality',
-        'amazing': 'Excellent Quality',
-        'wonderful': 'Excellent Quality',
-        'fantastic': 'Excellent Quality',
-        'awesome': 'Excellent Quality',
-        'superb': 'Excellent Quality',
-        'perfect': 'Excellent Quality',
-        'good': 'Good Service',
-        'love': 'Great Experience',
-        'best': 'Great Experience',
-        'happy': 'Great Experience',
-        'satisfied': 'Great Experience',
-        'comfortable': 'Good Service',
-        'professional': 'Friendly Staff',
-        'smooth': 'Smooth Delivery',
-        'quick': 'Fast Service',
-        'fast': 'Fast Service',
-        'recommend': 'Would Recommend',
-        'thank': 'Appreciation',
-    }
-    return mapping.get(kw, 'Other Praise')
+    for keywords, label in topics:
+        if any(kw in text_lower for kw in keywords):
+            return label
 
-
-def _categorize_suggestion(kw):
-    mapping = {
-        'payment': 'More Payment Options',
-        'option': 'More Payment Options',
-        'discount': 'Loyalty Program',
-        'loyalty': 'Loyalty Program',
-        'offer': 'Better Offers',
-        'weekend': 'Weekend Availability',
-        'timing': 'Extended Hours',
-        'availability': 'Extended Hours',
-        'add': 'New Features',
-        'introduce': 'New Features',
-        'improve': 'Improvements',
-        'can you': 'Service Request',
-        'could you': 'Service Request',
-        'would be nice': 'Feature Request',
-    }
-    return mapping.get(kw, 'Other Suggestion')
+    # If no topic matched, extract the first sentence
+    sentences = text.split('.')
+    for s in sentences:
+        s = s.strip()
+        if len(s) > 10 and _keyword_score(s, SUGGESTION_PATTERNS[0].split('|')[0].split('\\s')[0]):
+            return s[:60] + ('...' if len(s) > 60 else '')
+    return 'General Suggestion'
 
 
 def _get_customers_at_risk(customers, messages, conv_history):
@@ -235,27 +316,24 @@ def _get_customers_at_risk(customers, messages, conv_history):
         notes = (c.get('notes') or '').lower()
         reasons = []
 
-        # Check notes for risk keywords
         risk_score = _keyword_score(notes, AT_RISK_KW)
         if risk_score > 0:
             reasons.append('negative feedback')
 
-        # Check messages from this customer
         for msg in (conv_history.data or []) + (messages.data or []):
             if msg.get('customer_id') != cid:
                 continue
             if _keyword_score(msg.get('content') or '', AT_RISK_KW) > 0:
-                reasons.append('expressed dissatisfaction')
+                if 'expressed dissatisfaction' not in reasons:
+                    reasons.append('expressed dissatisfaction')
                 break
 
-        # Check if customer hasn't returned (visit_count <= 1 and has been contacted)
         visit_count = c.get('visit_count') or 0
         if visit_count <= 1 and c.get('last_contact'):
             reasons.append('no return visit')
 
-        # Check for unresolved complaints in notes
-        if any(kw in notes for kw in ['complaint', 'issue', 'problem', 'unhappy']):
-            if 'resolved' not in notes:
+        if any(kw in notes for kw in ['complaint', 'issue', 'problem', 'unhappy', 'wait']):
+            if 'resolved' not in notes and 'resolved' not in reasons:
                 reasons.append('unresolved complaint')
 
         if reasons:
@@ -331,14 +409,23 @@ def get_insights(user: AuthUser = Depends(get_current_user)):
     business_id = biz.data[0]['id']
 
     cutoff_30d = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
-    cutoff_7d = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
 
     # --- Fetch data ---
     customers = supabase.table('customers').select('*').eq('business_id', business_id).execute()
     total_count = _safe_count(customers)
 
-    recent_messages = supabase.table('messages').select('*').eq('business_id', business_id).gte('timestamp', cutoff_30d).execute()
-    conv_history = supabase.table('conversation_history').select('*').execute()
+    recent_messages = supabase.table('messages').select('*').eq(
+        'business_id', business_id
+    ).gte('timestamp', cutoff_30d).execute()
+
+    # Get only conversation history for this business's customers
+    biz_customer_ids = [c['id'] for c in (customers.data or [])]
+    if biz_customer_ids:
+        conv_history = supabase.table('conversation_history').select('*').in_(
+            'customer_id', biz_customer_ids
+        ).execute()
+    else:
+        conv_history = supabase.table('conversation_history').select('*').limit(0).execute()
 
     sent_msgs = [m for m in (recent_messages.data or []) if m.get('direction') == 'sent']
     recv_msgs = [m for m in (recent_messages.data or []) if m.get('direction') == 'received']
@@ -346,6 +433,43 @@ def get_insights(user: AuthUser = Depends(get_current_user)):
     sent_customers = len(set(m['customer_id'] for m in sent_msgs))
     recv_customers = len(set(m['customer_id'] for m in recv_msgs))
     response_rate = round((recv_customers / sent_customers * 100)) if sent_customers > 0 else 0
+
+    # --- Build customer name map ---
+    cust_name_map = {}
+    for c in (customers.data or []):
+        cust_name_map[c['id']] = c.get('name', f'Customer #{c["id"]}')
+
+    # --- Collect all customer texts for analysis ---
+    # We want: received messages (customer wrote these), conversation_history with role='user', and notes
+    all_customer_texts = []
+
+    for m in (recv_msgs or []):
+        cid = m.get('customer_id')
+        all_customer_texts.append({
+            'content': m.get('content') or '',
+            'customer_id': cid,
+            'customer_name': cust_name_map.get(cid, f'Customer #{cid}'),
+        })
+
+    for ch in (conv_history.data or []):
+        if ch.get('role') != 'user':
+            continue
+        cid = ch.get('customer_id')
+        all_customer_texts.append({
+            'content': ch.get('content') or '',
+            'customer_id': cid,
+            'customer_name': cust_name_map.get(cid, f'Customer #{cid}'),
+        })
+
+    # Also add notes as text sources
+    for c in (customers.data or []):
+        notes = c.get('notes') or ''
+        if notes.strip():
+            all_customer_texts.append({
+                'content': notes,
+                'customer_id': c['id'],
+                'customer_name': c.get('name', f'Customer #{c["id"]}'),
+            })
 
     # --- Health Metrics ---
     returning_count = sum(1 for c in (customers.data or []) if (c.get('visit_count') or 0) > 1)
@@ -372,87 +496,37 @@ def get_insights(user: AuthUser = Depends(get_current_user)):
     else:
         satisfaction = response_rate if response_rate > 0 else 0
 
-    # --- Top Issues ---
-    issues = _extract_issues(recent_messages, conv_history, customers)
-    total_issues = sum(issues.values())
+    # --- Top Issues - Dynamically extracted from customer texts ---
+    issues_data = _extract_issues_dynamic(all_customer_texts)
+
     issues_list = []
-
-    issue_config = [
-        ('packaging', '📦', 'Packaging complaints increased by {}%.', 'Compared to last month, more customers are reporting damaged packaging on delivery.'),
-        ('delivery', '🚚', '{} customers reported delayed delivery during the last 30 days.', 'Delivery delays are a common complaint affecting customer satisfaction.'),
-        ('staff', '👤', '{} customers mentioned staff behaviour concerns.', 'Customer service interactions need attention to prevent churn.'),
-        ('pricing', '💰', '{} customers raised pricing concerns.', 'Customers are sensitive to pricing — consider reviewing your rates.'),
-        ('quality', '📋', '{} customers reported quality issues.', 'Product or service quality needs improvement based on feedback.'),
-    ]
-
-    for key, icon, title_tmpl, desc in issue_config:
-        count = issues.get(key, 0)
-        if count > 0:
-            if key == 'packaging' and total_issues > 0:
-                pct = round(count / total_issues * 100)
-                issues_list.append({
-                    'icon': icon,
-                    'title': title_tmpl.format(pct),
-                    'desc': desc,
-                })
-            else:
-                issues_list.append({
-                    'icon': icon,
-                    'title': title_tmpl.format(count),
-                    'desc': desc,
-                })
-
-    # If no issues found from data, don't return fabricated ones
-    if not issues_list:
-        issues_list = []
+    icons = ['❗', '🚨', '⚠️', '🔴', '🟠']
+    for i, issue in enumerate(issues_data[:3]):
+        icon = icons[i] if i < len(icons) else '❗'
+        issues_list.append({
+            'icon': icon,
+            'label': issue['label'],
+            'count': issue['count'],
+            'example': issue['example'],
+            'customer_count': issue['customer_count'],
+        })
 
     # --- Customers At Risk Detail ---
     not_returned = sum(1 for c in at_risk_customers if 'no return visit' in c.get('reasons', []))
-    negative_feedback = sum(1 for c in at_risk_customers if 'negative feedback' in c.get('reasons', []) or 'unresolved complaint' in c.get('reasons', []))
+    negative_feedback = sum(1 for c in at_risk_customers if 'negative feedback' in c.get('reasons', []))
 
-    # --- Appreciate ---
-    appreciate_counts = {}
-    for msg in (recv_msgs or []) + (conv_history.data or []):
-        content = msg.get('content') or ''
-        for kw in PRAISE_KW:
-            if kw in content.lower():
-                for cat_kw in ['friendly', 'kind', 'caring', 'helpful', 'professional']:
-                    if cat_kw in content.lower():
-                        appreciate_counts['Friendly Staff'] = appreciate_counts.get('Friendly Staff', 0) + 1
-                        break
-                for cat_kw in ['great', 'excellent', 'amazing', 'perfect', 'superb', 'awesome', 'fantastic', 'wonderful']:
-                    if cat_kw in content.lower():
-                        appreciate_counts['Excellent Quality'] = appreciate_counts.get('Excellent Quality', 0) + 1
-                        break
-                for cat_kw in ['quick', 'fast']:
-                    if cat_kw in content.lower():
-                        appreciate_counts['Fast Service'] = appreciate_counts.get('Fast Service', 0) + 1
-                        break
-                for cat_kw in ['smooth']:
-                    if cat_kw in content.lower():
-                        appreciate_counts['Smooth Delivery'] = appreciate_counts.get('Smooth Delivery', 0) + 1
-                        break
+    # --- Appreciate - Dynamically extracted ---
+    appreciate_list = _extract_praise_dynamic(all_customer_texts)
 
-    # Fallback: if customer notes mention positive things
-    for c in (customers.data or []):
-        notes = (c.get('notes') or '').lower()
-        if 'friendly' in notes or 'kind' in notes:
-            appreciate_counts['Friendly Staff'] = appreciate_counts.get('Friendly Staff', 0) + 1
-        if 'quality' in notes or 'great' in notes or 'excellent' in notes:
-            appreciate_counts['Excellent Quality'] = appreciate_counts.get('Excellent Quality', 0) + 1
-        if 'fast' in notes:
-            appreciate_counts['Fast Service'] = appreciate_counts.get('Fast Service', 0) + 1
-        if 'delivery' in notes and ('good' in notes or 'smooth' in notes):
-            appreciate_counts['Smooth Delivery'] = appreciate_counts.get('Smooth Delivery', 0) + 1
+    # --- Suggestions - Dynamically extracted ---
+    suggestions_list = _extract_suggestions_dynamic(all_customer_texts)
 
-    appreciate_sorted = sorted(appreciate_counts.items(), key=lambda x: -x[1])
-    appreciate_list = [item[0] for item in appreciate_sorted[:4]] if appreciate_sorted else []
+    # --- Feedback breakdown ---
+    # Complaints: use the extracted issues as complaints
+    complaints_list = [{'label': i['label'], 'count': i['count']} for i in issues_data[:3]]
 
-    # --- Feedback Breakdown ---
-    feedback = _extract_feedback(recent_messages, conv_history)
-    complaints_list = feedback['complaints'][:3]
-    suggestions_list = [s['label'] for s in feedback['suggestions'][:3]]
-    praise_list = [p['label'] for p in feedback['praise'][:3]]
+    # Praise: use the appreciate list
+    praise_list = appreciate_list[:3]
 
     # --- Unreturned after negative feedback ---
     unreturned_after_negative = sum(
@@ -471,7 +545,7 @@ def get_insights(user: AuthUser = Depends(get_current_user)):
             'not_returned_after_negative': unreturned_after_negative,
         },
         'top_issues': issues_list,
-        'appreciate': appreciate_list if appreciate_list else ['Friendly Staff', 'Product Quality', 'Fast Service', 'Smooth Delivery'],
+        'appreciate': appreciate_list if appreciate_list else ['Friendly Staff', 'Good Service', 'Clean Environment'],
         'feedback': {
             'complaints': complaints_list if complaints_list else [],
             'suggestions': suggestions_list if suggestions_list else [],
