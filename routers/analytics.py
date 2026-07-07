@@ -500,7 +500,7 @@ def get_insights(user: AuthUser = Depends(get_current_user)):
     issues_data = _extract_issues_dynamic(all_customer_texts)
 
     issues_list = []
-    icons = ['❗', '🚨', '⚠️', '🔴', '🟠']
+    icons = ['exclamation', 'alert', 'warning', 'circle_filled', 'circle']
     for i, issue in enumerate(issues_data[:3]):
         icon = icons[i] if i < len(icons) else '❗'
         issues_list.append({

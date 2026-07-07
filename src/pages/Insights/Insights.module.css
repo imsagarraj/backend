@@ -1,17 +1,30 @@
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 32px;
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+}
+
 .pageTitle {
-  font-size: 1.375rem;
+  font-size: 1.625rem;
   font-weight: 700;
+  color: var(--color-text);
   margin-bottom: 4px;
+  letter-spacing: -0.02em;
 }
 
 .pageSubtitle {
   font-size: 0.8125rem;
-  color: var(--color-text-secondary);
-  margin-bottom: 28px;
+  color: var(--color-text-muted);
 }
 
 .section {
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 }
 
 .sectionHeader {
@@ -20,12 +33,8 @@
   gap: 8px;
   font-size: 0.9375rem;
   font-weight: 700;
-  margin-bottom: 14px;
-}
-
-.sectionNote {
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
+  color: var(--color-text);
+  letter-spacing: -0.01em;
   margin-bottom: 14px;
 }
 
@@ -33,40 +42,49 @@
 .healthRow {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 10px;
+  gap: 14px;
 }
 
 .healthCard {
-  padding: 18px 14px;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border);
+  padding: 20px;
+  border-radius: var(--radius-xl);
   background: var(--color-bg-card);
+  border: 1px solid var(--color-border-softer);
   text-align: center;
+  transition: all var(--transition-base);
+  cursor: default;
+}
+
+.healthCard:hover {
+  border-color: var(--color-border);
+  background: var(--color-bg-elevated);
 }
 
 .healthIcon {
   font-size: 1.5rem;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .healthValue {
-  font-size: 1.5rem;
+  font-size: 1.875rem;
   font-weight: 700;
   color: var(--color-text);
-  line-height: 1.2;
+  line-height: 1.1;
+  margin-bottom: 8px;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
 .healthLabel {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
+  font-weight: 500;
   color: var(--color-text-muted);
-  margin-top: 4px;
   line-height: 1.3;
 }
 
 .healthCardAlert {
-  padding: 18px 14px;
-  border-radius: var(--radius-lg);
+  padding: 20px;
+  border-radius: var(--radius-xl);
   border: 1px solid var(--color-warning);
   background: rgba(245, 158, 11, 0.06);
   text-align: center;
@@ -74,10 +92,15 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  transition: all var(--transition-base);
+}
+
+.healthCardAlert:hover {
+  background: rgba(245, 158, 11, 0.1);
 }
 
 .healthAlertLabel {
-  font-size: 0.65rem;
+  font-size: 0.625rem;
   font-weight: 600;
   color: var(--color-warning);
   text-transform: uppercase;
@@ -86,7 +109,7 @@
 
 .healthAlertIcon {
   font-size: 1.75rem;
-  margin: 6px 0;
+  margin: 8px 0;
 }
 
 .healthAlertText {
@@ -99,25 +122,31 @@
 .issuesGrid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  gap: 14px;
 }
 
 .issueCard {
-  padding: 18px;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border);
+  padding: 20px;
+  border-radius: var(--radius-xl);
   background: var(--color-bg-card);
+  border: 1px solid var(--color-border-softer);
+  transition: all var(--transition-base);
+}
+
+.issueCard:hover {
+  border-color: var(--color-border);
+  background: var(--color-bg-elevated);
 }
 
 .issueIcon {
   font-size: 1.25rem;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .issueTitle {
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   font-weight: 600;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   line-height: 1.4;
   color: var(--color-text);
   display: flex;
@@ -127,13 +156,14 @@
 }
 
 .issueCount {
-  font-size: 0.65rem;
-  font-weight: 500;
+  font-size: 0.625rem;
+  font-weight: 600;
   color: var(--color-text-muted);
-  padding: 2px 8px;
+  padding: 2px 10px;
   border-radius: 99px;
   background: var(--color-accent-subtle);
   white-space: nowrap;
+  letter-spacing: 0.02em;
 }
 
 .issueExample {
@@ -141,17 +171,11 @@
   color: var(--color-text-muted);
   font-style: italic;
   line-height: 1.5;
-  margin-top: 6px;
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
   background: var(--color-accent-subtle);
   border-left: 2px solid var(--color-accent-dim);
-}
-
-.issueDesc {
-  font-size: 0.75rem;
-  color: var(--color-text-secondary);
-  line-height: 1.5;
 }
 
 /* Appreciate tags */
@@ -163,8 +187,8 @@
 
 .appreciateTag {
   padding: 8px 16px;
-  border-radius: var(--radius-full);
-  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border-softer);
   background: var(--color-bg-card);
   font-size: 0.8125rem;
   font-weight: 500;
@@ -172,32 +196,41 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  transition: border-color var(--transition-fast), color var(--transition-fast);
+  transition: all var(--transition-fast);
 }
 
 .appreciateTag:hover {
   border-color: var(--color-accent);
   color: var(--color-text);
+  background: var(--color-bg-elevated);
 }
 
 /* Feedback 3-column grid */
 .feedbackGrid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  gap: 14px;
 }
 
 .feedbackCard {
-  padding: 18px;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border);
+  padding: 20px;
+  border-radius: var(--radius-xl);
   background: var(--color-bg-card);
+  border: 1px solid var(--color-border-softer);
+  transition: all var(--transition-base);
+}
+
+.feedbackCard:hover {
+  border-color: var(--color-border);
+  background: var(--color-bg-elevated);
 }
 
 .feedbackCardTitle {
   font-size: 0.875rem;
   font-weight: 700;
-  margin-bottom: 12px;
+  color: var(--color-text);
+  margin-bottom: 14px;
+  letter-spacing: -0.01em;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -207,7 +240,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 7px 0;
+  padding: 8px 0;
   border-bottom: 1px solid var(--color-border-softer);
   font-size: 0.8125rem;
 }
@@ -224,6 +257,7 @@
   font-weight: 600;
   color: var(--color-text-muted);
   font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .feedbackItemComplaint .feedbackLabel {
@@ -232,6 +266,25 @@
 
 .feedbackItemPraise .feedbackLabel {
   color: var(--color-success);
+}
+
+/* Empty / error state */
+.emptyState {
+  padding: 24px;
+  border-radius: var(--radius-xl);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-softer);
+  text-align: center;
+}
+
+.emptyIcon {
+  font-size: 2rem;
+  margin-bottom: 12px;
+}
+
+.emptyText {
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
 }
 
 @media (max-width: 1200px) {
